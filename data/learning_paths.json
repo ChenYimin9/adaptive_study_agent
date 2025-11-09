@@ -1,0 +1,38 @@
+[
+  {
+    "id": 2,
+    "user_id": 1,
+    "subject": "math",
+    "progress": 0.05,
+    "difficulty_level": "Beginner",
+    "target_completion_date": "2025-08-01",
+    "content": "{\"topics\": [{\"name\": \"Introduction to math\", \"description\": \"Basic concepts and fundamentals of math\", \"duration_days\": 3.0, \"resources\": [{\"title\": \"math Fundamentals\", \"type\": \"Video\", \"description\": \"Introduction to math concepts\", \"platform\": \"Khan Academy\", \"url\": \"https://www.khanacademy.org/search?search_input=math\"}, {\"title\": \"math Crash Course\", \"type\": \"Video Series\", \"description\": \"Comprehensive math course\", \"platform\": \"YouTube\", \"url\": \"https://www.youtube.com/results?search_query=math+crash+course\"}], \"practice_exercises\": [{\"question\": \"Basic math exercises\", \"difficulty\": \"Beginner\", \"estimated_time_minutes\": 20, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}, {\"name\": \"Advanced math\", \"description\": \"Advanced topics in math\", \"duration_days\": 4.5, \"resources\": [{\"title\": \"Advanced math Techniques\", \"type\": \"Article\", \"description\": \"In-depth guide to advanced math techniques\", \"platform\": \"Medium\", \"url\": \"https://medium.com/search?q=advanced+math\"}, {\"title\": \"math Practice Problems\", \"type\": \"Exercise Set\", \"description\": \"Collection of math problems with solutions\", \"platform\": \"GitHub\", \"url\": \"https://github.com/search?q=math+practice+problems\"}], \"practice_exercises\": [{\"question\": \"Advanced math problems\", \"difficulty\": \"Medium\", \"estimated_time_minutes\": 30, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}], \"milestones\": [{\"expected_completion_day\": 4.5, \"name\": \"math Midpoint\", \"assessment_criteria\": \"Complete half of the math material with 70%+ accuracy\"}]}",
+    "created_at": "2025-07-23T19:18:00.656522",
+    "last_updated": "2025-07-27T21:58:07.275589",
+    "ai_generated": true
+  },
+  {
+    "id": 3,
+    "user_id": 1,
+    "subject": "ENGLISH",
+    "progress": 0.0,
+    "difficulty_level": "Intermediate",
+    "target_completion_date": "2025-08-26",
+    "content": "{\"topics\": [{\"name\": \"Introduction to ENGLISH\", \"description\": \"Basic concepts and fundamentals of ENGLISH\", \"duration_days\": 10.0, \"resources\": [{\"title\": \"ENGLISH Fundamentals\", \"type\": \"Video\", \"description\": \"Introduction to ENGLISH concepts\", \"platform\": \"Khan Academy\", \"url\": \"https://www.khanacademy.org/search?search_input=ENGLISH\"}, {\"title\": \"ENGLISH Crash Course\", \"type\": \"Video Series\", \"description\": \"Comprehensive ENGLISH course\", \"platform\": \"YouTube\", \"url\": \"https://www.youtube.com/results?search_query=ENGLISH+crash+course\"}], \"practice_exercises\": [{\"question\": \"Basic ENGLISH exercises\", \"difficulty\": \"Medium\", \"estimated_time_minutes\": 20, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}, {\"name\": \"Advanced ENGLISH\", \"description\": \"Advanced topics in ENGLISH\", \"duration_days\": .0, \"resources\": [{\"title\": \"Advanced ENGLISH Techniques\", \"type\": \"Article\", \"description\": \"In-depth guide to advanced ENGLISH techniques\", \"platform\": \"Medium\", \"url\": \"https://medium.com/search?q=advanced+ENGLISH\"}, {\"title\": \"ENGLISH Practice Problems\", \"type\": \"Exercise Set\", \"description\": \"Collection of ENGLISH problems with solutions\", \"platform\": \"GitHub\", \"url\": \"https://github.com/search?q=ENGLISH+practice+problems\"}], \"practice_exercises\": [{\"question\": \"Advanced ENGLISH problems\", \"difficulty\": \"Medium\", \"estimated_time_minutes\": 30, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}], \"milestones\": [{\"expected_completion_day\": 15.0, \"name\": \"ENGLISH Midpoint\", \"assessment_criteria\": \"Complete half of the ENGLISH material with 70%+ accuracy\"}]}",
+    "created_at": "2025-07-27T22:27:44.323344",
+    "last_updated": "2025-07-27T22:27:44.323349",
+    "ai_generated": true
+  },
+  {
+    "id": 4,
+    "user_id": 1,
+    "subject": "chinese",
+    "progress": 0.0,
+    "difficulty_level": "Intermediate",
+    "target_completion_date": "2025-08-26",
+    "content": "{\"topics\": [{\"name\": \"Introduction to chinese\", \"description\": \"Basic concepts and fundamentals of chinese\", \"duration_days\": 10.0, \"resources\": [{\"title\": \"chinese Fundamentals\", \"type\": \"Video\", \"description\": \"Introduction to chinese concepts\", \"platform\": \"Khan Academy\", \"url\": \"https://www.khanacademy.org/search?search_input=chinese\"}, {\"title\": \"chinese Crash Course\", \"type\": \"Video Series\", \"description\": \"Comprehensive chinese course\", \"platform\": \"YouTube\", \"url\": \"https://www.youtube.com/results?search_query=chinese+crash+course\"}], \"practice_exercises\": [{\"question\": \"Basic chinese exercises\", \"difficulty\": \"Medium\", \"estimated_time_minutes\": 20, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}, {\"name\": \"Advanced chinese\", \"description\": \"Advanced topics in chinese\", \"duration_days\": 15.0, \"resources\": [{\"title\": \"Advanced chinese Techniques\", \"type\": \"Article\", \"description\": \"In-depth guide to advanced chinese techniques\", \"platform\": \"Medium\", \"url\": \"https://medium.com/search?q=advanced+chinese\"}, {\"title\": \"chinese Practice Problems\", \"type\": \"Exercise Set\", \"description\": \"Collection of chinese problems with solutions\", \"platform\": \"GitHub\", \"url\": \"https://github.com/search?q=chinese+practice+problems\"}], \"practice_exercises\": [{\"question\": \"Advanced chinese problems\", \"difficulty\": \"Medium\", \"estimated_time_minutes\": 30, \"answer\": \"Sample answer\", \"explanation\": \"Sample explanation\"}]}], \"milestones\": [{\"expected_completion_day\": 15.0, \"name\": \"chinese Midpoint\", \"assessment_criteria\": \"Complete half of the chinese material with 70%+ accuracy\"}]}",
+    "created_at": "2025-07-27T22:29:29.740412",
+    "last_updated": "2025-07-27T22:29:29.740418",
+    "ai_generated": true
+  }
+]

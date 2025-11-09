@@ -1,0 +1,28 @@
+# 核心Web框架
+streamlit>=1.35.0  # 用于构建交互式Web界面
+
+# 数据库连接
+mysql-connector-python>=8.0.33  # 连接MySQL数据库
+
+# 数据处理与分析
+pandas>=2.0.3  # 数据处理与分析
+numpy>=1.26.0  # 数值计算（pandas依赖）
+
+# 数据可视化
+plotly>=5.20.0  # 交互式图表生成
+plotly-express>=0.4.1  # 简化的plotly接口
+
+# LLM与API调用
+openai>=1.30.0  # 用于调用DeepSeek等兼容OpenAI API的模型
+
+# PDF生成
+reportlab>=4.0.8  # 生成PDF证书和报告
+PyPDF2 >=3.0.1  # 处理PDF文件
+python-docx >=1.1.2  # 生成Word文档
+
+# 环境配置（推荐）
+python-dotenv>=1.0.0  # 管理环境变量（如API密钥、数据库密码）
+
+# 时间处理
+python-dateutil>=2.8.2  # 扩展日期时间处理（pandas依赖）
+pytz>=2024.1  # 时区处理
