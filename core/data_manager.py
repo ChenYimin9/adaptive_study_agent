@@ -1,4 +1,4 @@
-# 1. 导入模块修改：删除 mysql.connector，改用 MySQLdb
+# 1. 
 import MySQLdb
 import MySQLdb.cursors  # 用于字典类型 Cursor
 import os
