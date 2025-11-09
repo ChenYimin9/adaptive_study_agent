@@ -1,13 +1,13 @@
-# 1. 
+# Import various libraries
 import MySQLdb
-import MySQLdb.cursors  # 用于字典类型 Cursor
+import MySQLdb.cursors  # Used for the dictionary type Cursor
 import os
 import json
 from datetime import datetime, timedelta
 from functools import lru_cache
 
 class Config:
-    # 数据库配置：保持不变（后续连接时映射参数）
+    # Database configuration
     DB_CONFIG = {
         'host': os.environ.get('DB_HOST', 'localhost'),
         'user': os.environ.get('DB_USER', 'root'),
@@ -16,8 +16,8 @@ class Config:
     }
 
 class DataManager:
-    """数据管理器（单例模式，确保全局仅一个实例，避免多连接）"""
-    _instance = None  # 单例实例存储
+    """Data Manager"""
+    _instance = None  #Singleton instance storage
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -29,14 +29,14 @@ class DataManager:
             cls._instance._initialize_database()
         return cls._instance
 
-    # 事务相关方法：保持不变（MySQLdb 兼容 autocommit 逻辑）
+    # Transaction-related methods
     def start_transaction(self):
         try:
-            if not self.connection or not self.connection.open:  # MySQLdb 用 open 判断连接是否有效
+            if not self.connection or not self.connection.open:  # MySQLdb uses open to determine whether a connection is valid
                 self._connect()
-            self.connection.autocommit(False)  # 关闭自动提交，开启事务
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
-            print(f"开启事务错误: {e}")
+            self.connection.autocommit(False)  # Turn off auto-commit and enable transactions
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Error in starting a transaction: {e}")
             return False
         return True
     
@@ -45,8 +45,8 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.commit()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
-            print(f"提交事务错误: {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Transaction submission error: {e}")
             return False
         return True
     
@@ -55,37 +55,36 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.rollback()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
-            print(f"回滚事务错误: {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Rollback transaction error: {e}")
             return False
         return True
         
     def _connect(self):
-        """建立数据库连接：核心修改处（替换为 MySQLdb 语法）"""
+        """Establish a database connection"""
         try:
-            # 2. 连接参数映射：mysql.connector → MySQLdb
-            # 关键映射：password → passwd；dictionary=True → cursorclass=DictCursor
+            # Connection parameter mapping: mysql.connector → MySQLdb
+            # Key mapping: password → passwd; dictionary=True → cursorclass=DictCursor
             self.connection = MySQLdb.connect(
                 host=self.config['host'],
                 user=self.config['user'],
-                passwd=self.config['password'],  # MySQLdb 用 passwd 而非 password
-                db=self.config['database'],     # MySQLdb 用 db 而非 database
-                port=3306,                      # 显式指定端口（默认3306，避免隐式错误）
-                connect_timeout=10,             # 连接超时（对应原 connection_timeout）
-                cursorclass=MySQLdb.cursors.DictCursor  # 确保返回字典类型结果（原 dictionary=True）
-                # MySQLdb 无需 ssl_disabled，默认不强制 SSL（解决原认证安全连接问题）
+                passwd=self.config['password'],  
+                db=self.config['database'],     
+                port=3306,                      # Explicitly specify the port (default 3306 to avoid implicit errors)
+                connect_timeout=10,             # Connection timeout (corresponding to the original connection_timeout)
+                cursorclass=MySQLdb.cursors.DictCursor  # Make sure to return a dictionary type result (original dictionary=True)
+                # MySQLdb does not require ssl_disabled and does not enforce SSL by default (to solve the problem of the original authenticated secure connection)
             )
                    
-            # 3. 创建 Cursor（直接用连接的 cursor 方法，已指定字典类型）
+            #Create a Cursor (directly using the linked cursor method, with the dictionary type specified)
             self.cursor = self.connection.cursor()
-            # 获取线程ID：MySQLdb 用 thread_id() 方法（原 connection_id 改为 thread_id()）
-            print(f"数据库连接成功（线程ID: {self.connection.thread_id()}）")
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
+            # To obtain the thread ID: MySQLdb uses the thread_id() method
+            print(f"The database connection was successful.（ThreadID: {self.connection.thread_id()}）")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
             error_msg = str(e)
-            print(f"数据库连接错误: {error_msg}")
-            # 保留「不存在数据库则创建」逻辑：临时连接也改用 MySQLdb
+            print(f"Database connection error: {error_msg}")
             if "Unknown database" in error_msg:
-                # 临时连接：不指定 db（避免数据库不存在报错）
+                # Temporary connection
                 temp_conn = MySQLdb.connect(
                     host=self.config['host'],
                     user=self.config['user'],
@@ -96,23 +95,22 @@ class DataManager:
                 temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
                 temp_cursor.close()
                 temp_conn.close()
-                print(f"数据库 {self.config['database']} 创建成功，重新连接...")
-                self._connect()  # 重新连接
-            # 清空无效连接对象
+                print(f"Database {self.config['database']} Creation successful. Reconnect...")
+                self._connect()  # Reconnect
+            # Clear the invalid connection objects
             self.connection = None
             self.cursor = None
     
     def _initialize_database(self):
-        """初始化数据库表结构：仅修改连接有效性判断和异常类型"""
-        if not self.cursor or not self.connection.open:  # MySQLdb 用 open 判断连接
+        """Initialize the database table structure"""
+        if not self.cursor or not self.connection.open:  # MySQLdb uses "open" to determine connections
              self._connect()
              if not self.cursor:
-                print("数据库连接失败，无法初始化表结构")
+                print("The database connection failed and the table structure could not be initialized")
                 return
         
-        # 以下「表创建逻辑完全不变」（SQL 语法通用）
         try:
-            # 用户表
+            # User Table
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -128,7 +126,7 @@ class DataManager:
                 )
             ''')
             
-            # 学习路径表
+            # Learning Path table
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS learning_paths (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -147,7 +145,7 @@ class DataManager:
                 )
             ''')
             
-            # 学习活动表
+            # Learning Activity Schedule
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS learning_activities (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -165,7 +163,7 @@ class DataManager:
                 )
             ''')
             
-            # 评估表
+            # Evaluation Form
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS assessments (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -179,7 +177,7 @@ class DataManager:
                 )
             ''')
             
-            # 路径评估表
+            # Path Evaluation Form
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS path_assessments (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -198,7 +196,7 @@ class DataManager:
                 )
             ''')
             
-            # 证书表
+            # Certificate Form
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS certifications (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -213,7 +211,7 @@ class DataManager:
                 )
             ''')
             
-            # 学习习惯表
+            # Learning Habits Chart
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS study_streaks (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -225,7 +223,7 @@ class DataManager:
                 )
             ''')
             
-            # 学习计划表
+            # Study Schedule
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS study_schedules (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -240,28 +238,28 @@ class DataManager:
             ''')
             
             self.connection.commit()
-            print("表结构初始化完成")
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
-            print(f"初始化表结构错误: {e}")
+            print("The table structure initialization has been completed")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"The structure of the initialization table is incorrect: {e}")
             self.connection.rollback()
     
     def execute_query(self, query, params=None, commit=True):
-        """执行查询：修改连接有效性判断、异常类型、Cursor 语法"""
+        """Execute the query: Modify the connection validity judgment, exception type, and Cursor syntax"""
         max_reconnect = 2
         reconnect_count = 0
 
         while reconnect_count < max_reconnect:
             try:
-                # 连接有效性判断：MySQLdb 用 open
+                # Connection validity determination: MySQLdb uses open
                 if not self.connection or not self.connection.open:
-                    print(f"连接失效，尝试重新连接（第 {reconnect_count+1} 次）")
+                    print(f"The connection failed. Try reconnecting（For {reconnect_count+1} times）")
                     self._connect()
                     if not self.connection or not self.connection.open:
                         reconnect_count += 1
                         continue
 
-                # 执行查询：MySQLdb 的 Cursor 兼容 execute 语法，无需改参数
-                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:  # 显式指定字典 Cursor
+                # To execute a query: MySQLdb's Cursor is compatible with the EXECUTE syntax, and there is no need to modify parameters
+                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:  # Explicitly specify the dictionary Cursor
                     cursor.execute(query, params or ())
                 
                     if query.strip().upper().startswith('SELECT'):
@@ -276,26 +274,26 @@ class DataManager:
                             self.connection.commit()
                         return cursor.rowcount
 
-            except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
+            except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
                 error_msg = str(e)
-                print(f"查询执行错误: {error_msg}")
-                # 连接错误判断：保留原有关键词
+                print(f"Query execution error: {error_msg}")
+                # Connection error judgment: Retain the original keywords
                 if any(keyword in error_msg for keyword in ["Lost connection", "Connection refused", "not connected"]):
                     reconnect_count += 1
                     self.connection = None
                     self.cursor = None
                     continue
-                # 事务回滚
+                # Transaction rollback
                 if self.connection and not self.connection.autocommit:
                     self.rollback_transaction()
                 return False
     
-        print(f"已尝试 {max_reconnect} 次重新连接，均失败")
+        print(f"Has been tried{max_reconnect} Each reconnection failed")
         return False
 
     
     def execute_batch(self, query, data, commit=True):
-        """执行批量插入：修改连接判断和异常类型"""
+        """Perform batch insertion: Modify the connection judgment and exception type"""
         try:
             if not self.connection.open:
                 self._connect()
@@ -307,12 +305,11 @@ class DataManager:
                     self.connection.commit()
                 return cursor.rowcount
                 
-        except MySQLdb.Error as e:  # 异常类型改为 MySQLdb.Error
-            print(f"批量查询执行错误: {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Batch query execution error: {e}")
             self.connection.rollback()
             return False
     
-    # 以下「业务方法完全不变」（SQL 逻辑通用）
     def get_user_by_id(self, user_id):
         query = "SELECT * FROM users WHERE id = %s"
         result = self.execute_query(query, (user_id,))
