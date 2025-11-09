@@ -77,8 +77,8 @@ class DataManager:
            
             # 创建字典类型游标（mysql.connector用dictionary=True参数）
             self.cursor = self.connection.cursor(dictionary=True)
-            # mysql.connector用thread_id属性获取线程ID
-            print(f"The database connection was successful.（ThreadID: {self.connection.thread_id}）")
+            # 修复：mysql.connector中thread_id是方法，需调用（原MySQLdb是属性）
+            print(f"The database connection was successful.（ThreadID: {self.connection.thread_id()}）")
         except mysql.connector.Error as e:  # 异常类型适配
             error_msg = str(e)
             print(f"Database connection error: {error_msg}")
