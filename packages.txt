@@ -1,2 +1,3 @@
-libmariadb-dev-compat
-libmariadb-dev
+build-essential
+pkg-config
+default-libmysqlclient-dev
