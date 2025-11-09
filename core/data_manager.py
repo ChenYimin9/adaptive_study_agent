@@ -1,6 +1,6 @@
 # Import various libraries
-import MySQLdb
-import MySQLdb.cursors  # Used for the dictionary type Cursor
+import mysql.connector
+from mysql.connector import Error
 import os
 import json
 from datetime import datetime, timedelta
