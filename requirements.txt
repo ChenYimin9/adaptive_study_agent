@@ -2,7 +2,7 @@
 streamlit>=1.35.0  # Used for building interactive Web interfaces
 
 # Database connection
-
+mysqlclient>=2.2.0
 
 # Data processing and analysis
 pandas>=2.0.3  # Data processing and analysis
@@ -27,5 +27,4 @@ python-dotenv>=1.0.0  # Manage environment variables (such as API keys, database
 python-dateutil>=2.8.2  # Extended Date and Time processing (pandas dependency)
 pytz>=2024.1  # Time zone processing
 
-mysqlclient>=2.2.0
 streamlit-autorefresh>=0.1.1  
