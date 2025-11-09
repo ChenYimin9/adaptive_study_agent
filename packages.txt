@@ -1,2 +1,2 @@
-libmysqlclient-dev
-python3-dev
+libmariadb-dev-compat
+libmariadb-dev
