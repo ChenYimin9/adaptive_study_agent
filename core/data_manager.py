@@ -7,12 +7,12 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 class Config:
+    # Database configuration
     DB_CONFIG = {
-        'host': os.environ.get('RAILWAY_PRIVATE_DOMAIN'),
-        'user': os.environ.get('MYSQLUSER', 'root'),
-        'password': os.environ.get('MYSQL_ROOT_PASSWORD','cNrkbghIJeXbNqdMlORVoRNinSEiPgEh'),
-        'database': os.environ.get('MYSQL_DATABASE', 'mysql://root:cNrkbghIJeXbNqdMlORVoRNinSEiPgEh@mysql.railway.internal:3306/railway'),
-        'port': 3306
+        'host': os.environ.get('DB_HOST', 'localhost'),
+        'user': os.environ.get('DB_USER', 'root'),
+        'password': os.environ.get('DB_PASSWORD', '123456'),
+        'database': os.environ.get('DB_NAME', 'adaptive_study_agent')
     }
 
 class DataManager:
