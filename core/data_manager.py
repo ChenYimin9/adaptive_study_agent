@@ -10,8 +10,9 @@ class Config:
     # Database configuration
     DB_CONFIG = {
         'host': os.environ.get('DB_HOST', 'localhost'),
-        'user': os.environ.get('DB_USER', 'root'),
-        'password': os.environ.get('DB_PASSWORD', '123456'),
+        'user': os.environ.get('DB_USER', 'chenyimin_user'),
+        'password': os.environ.get('DB_PASSWORD', '9c623APtOl77OwjmSUG2g7CUJKr8cumm'
+),
         'database': os.environ.get('DB_NAME', 'adaptive_study_agent')
     }
 
