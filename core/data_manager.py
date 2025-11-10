@@ -1,3 +1,4 @@
+# Import various libraries
 import MySQLdb
 import MySQLdb.cursors  # Used for the dictionary type Cursor
 import os
@@ -6,18 +7,17 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 class Config:
-    # 适配 Railway MySQL 的数据库配置
     DB_CONFIG = {
         'host': os.environ.get('RAILWAY_PRIVATE_DOMAIN'),
         'user': os.environ.get('MYSQLUSER', 'root'),
-        'password': os.environ.get('MYSQL_ROOT_PASSWORD'),
-        'database': os.environ.get('MYSQL_DATABASE', 'railway'),  # 从截图中可知数据库名为 railway
+        'password': os.environ.get('MYSQL_ROOT_PASSWORD','cNrkbghIJeXbNqdMlORVoRNinSEiPgEh'),
+        'database': os.environ.get('MYSQL_DATABASE', 'mysql://root:cNrkbghIJeXbNqdMlORVoRNinSEiPgEh@mysql.railway.internal:3306/railway'),
         'port': 3306
     }
 
 class DataManager:
     """Data Manager"""
-    _instance = None  # Singleton instance storage
+    _instance = None  #Singleton instance storage
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -76,7 +76,7 @@ class DataManager:
                 # MySQLdb does not require ssl_disabled and does not enforce SSL by default (to solve the problem of the original authenticated secure connection)
             )
                    
-            # Create a Cursor (directly using the linked cursor method, with the dictionary type specified)
+            #Create a Cursor (directly using the linked cursor method, with the dictionary type specified)
             self.cursor = self.connection.cursor()
             # To obtain the thread ID: MySQLdb uses the thread_id() method
             print(f"The database connection was successful.（ThreadID: {self.connection.thread_id()}）")
