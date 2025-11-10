@@ -9,11 +9,11 @@ from functools import lru_cache
 class Config:
     # Database configuration
     DB_CONFIG = {
-        'host': os.environ.get('DB_HOST', 'postgresql://chenyimin_user:9c623APtOl77OwjmSUG2g7CUJKr8cumm@dpg-d48n5numcj7s73e2cqug-a.singapore-postgres.render.com/chenyimin'),
+        'host': os.environ.get('DB_HOST', 'dpg-d48n5numcj7s73e2cqug-a'),
         'user': os.environ.get('DB_USER', 'chenyimin_user'),
         'password': os.environ.get('DB_PASSWORD', '9c623APtOl77OwjmSUG2g7CUJKr8cumm'
 ),
-        'database': os.environ.get('DB_NAME', 'adaptive_study_agent')
+        'database': os.environ.get('DB_NAME', 'chenyimin')
     }
 
 class DataManager:
