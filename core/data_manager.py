@@ -10,7 +10,7 @@ class Config:
         'host': os.environ.get('MYSQL_HOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQL_USER', 'root'),
         'password': os.environ.get('MYSQL_PASSWORD', 'otdMRWbvidMaSJWfdAOtHecgzGRozXDD'),  
-        'database': os.environ.get('MYSQL_DATABASE', 'railway')  # 与环境变量的数据库名保持一致，此处默认值为"railway"
+        'database': os.environ.get('MYSQL_DATABASE', 'MySQL')  # 与环境变量的数据库名保持一致，此处默认值为"railway"
     }
 
 class DataManager:
