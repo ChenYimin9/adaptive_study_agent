@@ -6,12 +6,11 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 class Config:
-    # 适配Railway MySQL环境变量的数据库配置
     DB_CONFIG = {
         'host': os.environ.get('MYSQL_HOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQL_USER', 'root'),
         'password': os.environ.get('MYSQL_PASSWORD', 'otdMRWbvidMaSJWfdAOtHecgzGRozXDD'),  
-        'database': os.environ.get('MYSQL_DATABASE', 'adaptive_study_db')
+        'database': os.environ.get('MYSQL_DATABASE', 'railway')  # 改为环境变量的数据库名“railway”
     }
 
 class DataManager:
