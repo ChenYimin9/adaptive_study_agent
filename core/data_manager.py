@@ -10,8 +10,8 @@ class Config:
     DB_CONFIG = {
         'host': os.environ.get('MYSQL_HOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQL_USER', 'root'),
-        'password': os.environ.get('MYSQL_PASSWORD', 'otdMRWbvidMaSJWfdAOtHecgzGRozXDD'),  
-        'database': os.environ.get('MYSQL_DATABASE', 'root')  # Be consistent with the database name of the environment variable
+        'password': os.environ.get('MYSQL_PASSWORD', 'zGWsHFZwAezCMEIbVMQawYIByWhtkBEM'),  
+        'database': os.environ.get('MYSQL_DATABASE', 'railway')  # Be consistent with the database name of the environment variable
     }
 
 class DataManager:
