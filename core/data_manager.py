@@ -10,8 +10,8 @@ class Config:
     DB_CONFIG = {
         'host': os.environ.get('MYSQL_HOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQL_USER', 'root'),
-        'password': os.environ.get('MYSQL_PASSWORD', 'zGWsHFZwAezCMEIbVMQawYIByWhtkBEM'),  
-        'database': os.environ.get('MYSQL_DATABASE', 'railway')  # Be consistent with the database name of the environment variable
+        'password': os.environ.get('MYSQL_PASSWORD', '123456'),  # 已修改为你的密码123456
+        'database': os.environ.get('MYSQL_DATABASE', 'railway')
     }
 
 class DataManager:
@@ -22,6 +22,13 @@ class DataManager:
         if not cls._instance:
             cls._instance = super(DataManager, cls).__new__(cls)
             cls._instance.config = Config.DB_CONFIG
+            # 打印连接参数（调试用）
+            print("数据库连接参数：")
+            print(f"host: {cls._instance.config['host']}")
+            print(f"user: {cls._instance.config['user']}")
+            print(f"password: {cls._instance.config['password']} (调试显示)")
+            print(f"database: {cls._instance.config['database']}")
+            
             cls._instance.connection = None
             cls._instance.cursor = None
             cls._instance._connect()
@@ -31,9 +38,9 @@ class DataManager:
     # Transaction-related Methods
     def start_transaction(self):
         try:
-            if not self.connection or not self.connection.open:  # MySQLdb uses open to determine whether a connection is valid
+            if not self.connection or not self.connection.open:
                 self._connect()
-            self.connection.autocommit(False)  # Disable auto-commit and enable transactions
+            self.connection.autocommit(False)
         except MySQLdb.Error as e:
             print(f"An error occurred when starting a transaction: {e}")
             return False
@@ -62,7 +69,6 @@ class DataManager:
     def _connect(self):
         """Establish a database connection with SSL support for Railway"""
         try:
-            # Add SSL configuration required by Railway's MySQL
             self.connection = MySQLdb.connect(
                 host=self.config['host'],
                 user=self.config['user'],
@@ -71,7 +77,7 @@ class DataManager:
                 port=3306,                     
                 connect_timeout=10,            
                 cursorclass=MySQLdb.cursors.DictCursor,
-                ssl={'ssl_mode': 'REQUIRED'}  # Critical: Enable SSL required by Railway
+                ssl={'ssl_mode': 'REQUIRED'}  # Railway强制SSL配置
             )
                    
             self.cursor = self.connection.cursor()
@@ -80,25 +86,27 @@ class DataManager:
             error_msg = str(e)
             print(f"Database connection error: {error_msg}")
             if "Unknown database" in error_msg:
-                # Temporary connection to create database if not exists
-                temp_conn = MySQLdb.connect(
-                    host=self.config['host'],
-                    user=self.config['user'],
-                    passwd=self.config['password'],
-                    connect_timeout=10,
-                    ssl={'ssl_mode': 'REQUIRED'}  # SSL for temp connection too
-                )
-                temp_cursor = temp_conn.cursor()
-                temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
-                temp_cursor.close()
-                temp_conn.close()
-                print(f"Database {self.config['database']} created successfully. Reconnecting...")
-                self._connect()  # Reconnect after creating database
+                try:
+                    temp_conn = MySQLdb.connect(
+                        host=self.config['host'],
+                        user=self.config['user'],
+                        passwd=self.config['password'],
+                        connect_timeout=10,
+                        ssl={'ssl_mode': 'REQUIRED'}
+                    )
+                    temp_cursor = temp_conn.cursor()
+                    temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
+                    temp_cursor.close()
+                    temp_conn.close()
+                    print(f"Database {self.config['database']} created successfully. Reconnecting...")
+                    self._connect()
+                except MySQLdb.Error as te:
+                    print(f"Failed to create database: {te}")
             self.connection = None
             self.cursor = None
     
     def _initialize_database(self):
-        """Initialize the database table structure"""
+        """Initialize the database table structure (完整表结构)"""
         if not self.cursor or not self.connection.open:
              self._connect()
              if not self.cursor:
