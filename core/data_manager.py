@@ -4,16 +4,27 @@ import os
 import json
 from datetime import datetime, timedelta
 from functools import lru_cache
+from dbutils.pooled_db import PooledDB
 
 class Config:
-    # 适配Railway的MySQL环境变量
-    DB_CONFIG = {
+    # 连接池配置
+    POOL_CONFIG = {
         'host': os.environ.get('MYSQLHOST', 'localhost'),
         'user': os.environ.get('MYSQLUSER', 'root'),
         'password': os.environ.get('MYSQLPASSWORD', '123456'),
         'database': os.environ.get('MYSQLDATABASE', 'railway'),
-        'port': int(os.environ.get('MYSQLPORT', 3306))
+        'port': int(os.environ.get('MYSQLPORT', 3306)),
+        'maxconnections': 5,  # 最大连接数
+        'mincached': 2,       # 初始化时创建的空闲连接数
+        'cursorclass': MySQLdb.cursors.DictCursor
     }
+    pool = PooledDB(MySQLdb, **POOL_CONFIG)
+
+class DataManager:
+    def _connect(self):
+        # 从连接池获取连接
+        self.connection = Config.pool.connection()
+        self.cursor = self.connection.cursor()
 
 class DataManager:
     """Data Manager"""
