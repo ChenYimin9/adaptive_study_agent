@@ -1,4 +1,3 @@
-# Import various libraries
 import MySQLdb
 import MySQLdb.cursors  # Used for the dictionary type Cursor
 import os
@@ -7,11 +6,13 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 class Config:
+    # 适配Railway的MySQL环境变量
     DB_CONFIG = {
-        'host': os.environ.get('MYSQL_HOST', 'mysql.railway.internal'),
-        'user': os.environ.get('MYSQL_USER', 'root'),
-        'password': os.environ.get('MYSQL_PASSWORD', '123456'),  # 已修改为你的密码123456
-        'database': os.environ.get('MYSQL_DATABASE', 'railway')
+        'host': os.environ.get('MYSQLHOST', 'localhost'),
+        'user': os.environ.get('MYSQLUSER', 'root'),
+        'password': os.environ.get('MYSQLPASSWORD', '123456'),
+        'database': os.environ.get('MYSQLDATABASE', 'railway'),
+        'port': int(os.environ.get('MYSQLPORT', 3306))
     }
 
 class DataManager:
@@ -22,27 +23,20 @@ class DataManager:
         if not cls._instance:
             cls._instance = super(DataManager, cls).__new__(cls)
             cls._instance.config = Config.DB_CONFIG
-            # 打印连接参数（调试用）
-            print("数据库连接参数：")
-            print(f"host: {cls._instance.config['host']}")
-            print(f"user: {cls._instance.config['user']}")
-            print(f"password: {cls._instance.config['password']} (调试显示)")
-            print(f"database: {cls._instance.config['database']}")
-            
             cls._instance.connection = None
             cls._instance.cursor = None
             cls._instance._connect()
             cls._instance._initialize_database()
         return cls._instance
 
-    # Transaction-related Methods
+    # Transaction-related methods
     def start_transaction(self):
         try:
-            if not self.connection or not self.connection.open:
+            if not self.connection or not self.connection.open:  # MySQLdb uses open to determine whether a connection is valid
                 self._connect()
-            self.connection.autocommit(False)
-        except MySQLdb.Error as e:
-            print(f"An error occurred when starting a transaction: {e}")
+            self.connection.autocommit(False)  # Turn off auto-commit and enable transactions
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Error in starting a transaction: {e}")
             return False
         return True
     
@@ -51,8 +45,8 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.commit()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:
-            print(f"Transaction commit error: {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Transaction submission error: {e}")
             return False
         return True
     
@@ -61,56 +55,56 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.rollback()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:
-            print(f"Rollback transaction error {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Rollback transaction error: {e}")
             return False
         return True
         
     def _connect(self):
-        """Establish a database connection with SSL support for Railway"""
+        """Establish a database connection"""
         try:
+            # 从配置中读取端口，适配Railway环境变量
             self.connection = MySQLdb.connect(
                 host=self.config['host'],
                 user=self.config['user'],
                 passwd=self.config['password'],  
                 db=self.config['database'],     
-                port=3306,                     
-                connect_timeout=10,            
-                cursorclass=MySQLdb.cursors.DictCursor,
-                ssl={'ssl_mode': 'REQUIRED'}  # Railway强制SSL配置
+                port=self.config['port'],                      # 显式使用配置的端口
+                connect_timeout=10,             # Connection timeout
+                cursorclass=MySQLdb.cursors.DictCursor  # Return dictionary type result
             )
                    
+            # Create a Cursor
             self.cursor = self.connection.cursor()
-            print(f"The database connection was successful.（ThreadID: {self.connection.thread_id()}）")
-        except MySQLdb.Error as e:
+            print(f"Database connection successful.（ThreadID: {self.connection.thread_id()}）")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
             error_msg = str(e)
             print(f"Database connection error: {error_msg}")
             if "Unknown database" in error_msg:
-                try:
-                    temp_conn = MySQLdb.connect(
-                        host=self.config['host'],
-                        user=self.config['user'],
-                        passwd=self.config['password'],
-                        connect_timeout=10,
-                        ssl={'ssl_mode': 'REQUIRED'}
-                    )
-                    temp_cursor = temp_conn.cursor()
-                    temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
-                    temp_cursor.close()
-                    temp_conn.close()
-                    print(f"Database {self.config['database']} created successfully. Reconnecting...")
-                    self._connect()
-                except MySQLdb.Error as te:
-                    print(f"Failed to create database: {te}")
+                # Temporary connection to create database
+                temp_conn = MySQLdb.connect(
+                    host=self.config['host'],
+                    user=self.config['user'],
+                    passwd=self.config['password'],
+                    port=self.config['port'],
+                    connect_timeout=10
+                )
+                temp_cursor = temp_conn.cursor()
+                temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
+                temp_cursor.close()
+                temp_conn.close()
+                print(f"Database {self.config['database']} created successfully. Reconnect...")
+                self._connect()  # Reconnect
+            # Clear invalid connection objects
             self.connection = None
             self.cursor = None
     
     def _initialize_database(self):
-        """Initialize the database table structure (完整表结构)"""
-        if not self.cursor or not self.connection.open:
+        """Initialize the database table structure"""
+        if not self.cursor or not self.connection.open:  # MySQLdb uses "open" to determine connections
              self._connect()
              if not self.cursor:
-                print("The database connection failed and the table structure could not be initialized")
+                print("Database connection failed, unable to initialize table structure")
                 return
         
         try:
@@ -242,26 +236,28 @@ class DataManager:
             ''')
             
             self.connection.commit()
-            print("The table structure initialization has been completed")
-        except MySQLdb.Error as e:
-            print(f"There is an error in initializing the table structure: {e}")
+            print("Table structure initialization completed")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Initialization table structure error: {e}")
             self.connection.rollback()
     
     def execute_query(self, query, params=None, commit=True):
-        """Execute the query with reconnection logic"""
+        """Execute the query: Modify connection validity judgment, exception type, and Cursor syntax"""
         max_reconnect = 2
         reconnect_count = 0
 
         while reconnect_count < max_reconnect:
             try:
+                # Connection validity determination: MySQLdb uses open
                 if not self.connection or not self.connection.open:
-                    print(f"Connection failed. Trying to reconnect（{reconnect_count+1} times）")
+                    print(f"Connection failed. Trying to reconnect（Attempt {reconnect_count+1}）")
                     self._connect()
                     if not self.connection or not self.connection.open:
                         reconnect_count += 1
                         continue
 
-                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:
+                # Execute query
+                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:  # Explicitly specify dictionary Cursor
                     cursor.execute(query, params or ())
                 
                     if query.strip().upper().startswith('SELECT'):
@@ -276,24 +272,26 @@ class DataManager:
                             self.connection.commit()
                         return cursor.rowcount
 
-            except MySQLdb.Error as e:
+            except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
                 error_msg = str(e)
                 print(f"Query execution error: {error_msg}")
+                # Connection error judgment
                 if any(keyword in error_msg for keyword in ["Lost connection", "Connection refused", "not connected"]):
                     reconnect_count += 1
                     self.connection = None
                     self.cursor = None
                     continue
+                # Transaction rollback
                 if self.connection and not self.connection.autocommit:
                     self.rollback_transaction()
                 return False
     
-        print(f"Tried {max_reconnect} times, all reconnections failed")
+        print(f"Failed after {max_reconnect} reconnection attempts")
         return False
 
     
     def execute_batch(self, query, data, commit=True):
-        """Perform batch insertion"""
+        """Perform batch insertion: Modify connection judgment and exception type"""
         try:
             if not self.connection.open:
                 self._connect()
@@ -305,8 +303,8 @@ class DataManager:
                     self.connection.commit()
                 return cursor.rowcount
                 
-        except MySQLdb.Error as e:
-            print(f"An error occurred in the batch query execution: {e}")
+        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            print(f"Batch query execution error: {e}")
             self.connection.rollback()
             return False
     

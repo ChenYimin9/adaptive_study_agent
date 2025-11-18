@@ -890,14 +890,14 @@ def show_learning_path():
                     
                     st.write("You must score 80% or higher to complete this topic:")
                     col1, col2, col3, col4 = st.columns(4)
-                    with col1: use_saved = st.button("Use Upload evaluation", key=f"use_saved_{i}")
-                    with col2: generate_new = st.button("Generate New Assessment", key=f"generate_new_{i}")
-                    with col3: save_current = st.button("Upload evaluation", key=f"save_current_{i}")
+                    with col1: use_saved = st.button("The Last Assessment", key=f"use_saved_{i}")
+                    with col2: generate_new = st.button("Re-Assessment", key=f"generate_new_{i}")
+                    with col3: save_current = st.button("Save Assessment", key=f"save_current_{i}")
                     with col4: delete_saved = st.button("Delete Saved", key=f"delete_saved_{i}")
 
                     if generate_new:
                         if st.session_state.assessment_generating[topic_key]:
-                            st.info("Already generating assessment questions...")
+                            st.info("The system has crashed. Please do not click multiple times. It is recommended to log in again")
                         else:
                             st.session_state.assessment_generating[topic_key] = True
                             
@@ -905,14 +905,31 @@ def show_learning_path():
                                 st.error("DeepSeek API Key is required. Please set it in the dashboard.")
                                 st.session_state.assessment_generating[topic_key] = False
                             else:
-                                with st.spinner("Generating new assessment questions..."):
+                                with st.spinner("Generate a new assessment..."):
                                     full_topic_key = f"{path_id}_topic_{i}_{topic['name']}"
+                                    
+                                    # 1. Clear this topic from the Session
+                                    for key in list(st.session_state.keys()):
+                                        if full_topic_key in key:
+                                            del st.session_state[key]
+                                    
+                                    # 2. Delete this topic from the database
+                                    learning_engine.data_manager.execute_query(
+                                        "DELETE FROM assessments WHERE user_id = %s AND topic_name = %s",
+                                        (user['id'], topic['name'])
+                                    )
+                                    
+                                    # 3. Force refresh the path data
+                                    st.session_state.active_path = None  # Clear the cache of the old path
+                                    st.session_state.active_path = learning_engine.get_learning_path(path_id, user['id'])  # 重新加载
+                                    
+                                    # "Generate logic
                                     if full_topic_key in st.session_state.assessment_state:
                                         del st.session_state.assessment_state[full_topic_key]
                                     
                                     questions_result = assessment_manager.generate_practice_exercises(
                                         path['subject'], topic['name'], path['difficulty_level'],
-                                        st.session_state.ai_agent, num_exercises=10
+                                        st.session_state.ai_agent, num_exercises=15
                                     )
                                     
                                     if not questions_result or questions_result["status"] != "success" or len(questions_result["exercises"]) == 0:
@@ -924,14 +941,14 @@ def show_learning_path():
                                         # After the assessment is generated, the path data cached at the front end is updated synchronously
                                         learning_engine.add_topic_questions(path['id'], paths, topic['name'], questions, user['id'])
                                         # Re-obtain the latest path data and update it to the session state
-                                        st.session_state.active_path = learning_engine.get_learning_path(path['id'], user['id'])
+                                        st.session_state.active_path = learning_engine.get_learning_path(path_id, user['id'])
                                         # Re-parse the path content (make sure to include the newly generated evaluation question)
                                         content = json.loads(st.session_state.active_path['content'])
                                         topics = content.get('topics', [])  # Refresh the topics list
                                         st.session_state.show_assessment[topic_key] = True
 
                                         st.session_state.assessment_generating[topic_key] = False
-                                        st.success("New assessment generated successfully!")
+                                        st.success(f"The new assessment has been generated successfully! {topic['name']} ")
                                         st.rerun()
 
                     if save_current:
@@ -1056,6 +1073,9 @@ def show_learning_path():
                                         current_state['total_score'] = (sum(valid_scores)/len(valid_scores)*100) if valid_scores else 0.0
                                         current_state['submitted'] = True
                                         
+                                        # Explicitly update the top-level session_state key
+                                        st.session_state.assessment_state[full_topic_key] = current_state
+                                        
                                         st.session_state.topic_assessment_scores[full_topic_key] = current_state['total_score']
                                         
                                         assessment_result = {
@@ -1102,7 +1122,7 @@ def show_learning_path():
                                 questions, current_state['user_answers'], current_state['scores'], current_state['feedback']
                             )):
                                 with st.expander(f"Question {idx+1}: {q.get('question', 'No question')}", expanded=False):
-                                    display_ans = ans.strip() if ans.strip() != "" else "未填写"
+                                    display_ans = ans.strip() if ans.strip() != "" else "Not filled in"
                                     st.write(f"**Your answer:** {display_ans}")
                                     
                                     if q.get('type') == 'multiple_choice' and q.get('options') and q.get('correct_option') is not None:
@@ -1637,7 +1657,7 @@ def show_planner():
             else:
                 st.error("There are problems with the current network.")
     else:
-        st.error("Note: In case of API disconnection, the default plan will be used.")
+        st.success("Note: In case of API disconnection, the default plan will be used.")
 
     # Delete the function of saved plans
     st.subheader("📜 Saved Study Plans")

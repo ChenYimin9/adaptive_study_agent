@@ -18,6 +18,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from .data_manager import DataManager
 import logging
+import re
 
 # Configuration log
 logging.basicConfig(
@@ -203,8 +204,8 @@ class MockLearningEngine:
                             "question": f"Explain the basic concepts of {subject}",
                             "difficulty": difficulty,
                             "estimated_time_minutes": 20,
-                            "answer": f"{subject}the basic concepts include...",
-                            "explanation": f"This question assesses the understanding of the code concepts of {subject}..."
+                            "answer": f"{subject} the basic concepts include...",
+                            "explanation": f"This question assesses the understanding of the core concepts of {subject}..."
                         }
                     ]
                 }
@@ -217,7 +218,7 @@ class MockLearningEngine:
                 }
             ],
             "learning_strategies": [
-                f"Spend time every day reviewing the core concepts of{subject}",
+                f"Spend time every day reviewing the core concepts of {subject}",
                 "Do exercises to consolidate what you have learned"
             ]
         }
@@ -245,7 +246,7 @@ class MockLearningEngine:
             * Descriptive title
             * Resource types (videos, articles, interactions, etc.)
             * A detailed description of content/value
-            * Source/Platform name (e.g., Coursera, YouTube, Medium, Khan Academy
+            * Source/Platform name (e.g., Coursera, YouTube, Medium, Khan Academy)
             * The URL format is [Platform base URL] + search query related to the resource
             - Example：
                 - https://www.coursera.org/search?query={subject}+fundamentals
@@ -262,7 +263,7 @@ class MockLearningEngine:
         2. 2-3 key milestones, including:
         - Expected completion date (relative to the start)
         - Descriptive milestone name
-        - Specific assessment criteria (quantified as much as possible
+        - Specific assessment criteria (quantified as much as possible)
         
         3. Three to four learning strategies, specifically tailored for the following aspects:
         - The unique challenges of this discipline
@@ -320,20 +321,26 @@ class MockLearningEngine:
         
         try:
             response = ai_agent._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                # Verify the URL format in the response
-                path_content = json.loads(response)
-                if "topics" in path_content:
-                    for topic in path_content["topics"]:
-                        if "resources" in topic:
-                            for resource in topic["resources"]:
-                                if "url" in resource:
-                                    # Check whether the URL contains search query parameters
-                                    if "search?" not in resource["url"] and "query=" not in resource["url"]:
-                                        logger.warning(f"URL {resource['url']} Search format that does not meet the requirements")
-                return path_content
-        except (json.JSONDecodeError, Exception) as e:
-            logger.error(f"The AI learning path generation failed: {e}")
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for learning path: {response}")
+                return None
+            
+            # Verify the URL format in the response
+            path_content = json.loads(response.strip())
+            if "topics" in path_content:
+                for topic in path_content["topics"]:
+                    if "resources" in topic:
+                        for resource in topic["resources"]:
+                            if "url" in resource:
+                                # Check whether the URL contains search query parameters
+                                if "search?" not in resource["url"] and "query=" not in resource["url"]:
+                                    logger.warning(f"URL {resource['url']} does not meet the required search format")
+            return path_content
+        except json.JSONDecodeError as e:
+            logger.error(f"AI learning path JSON parsing failed: {e}, Response: {response[:200]}...")
+            return None
+        except Exception as e:
+            logger.error(f"AI learning path generation failed: {e}, Response: {str(response)[:200]}...")
             return None
 
     def update_viewed_resource(self, user_id, path_id, topic_name, resource_name, duration_minutes=0):
@@ -357,7 +364,17 @@ class MockLearningEngine:
                 if result:
                     # The record exists: updated
                     record = result[0]
-                    content_dict = json.loads(record['content'])
+                    # Enhance the robustness of JSON parsing
+                    content_str = record.get('content', '{}')
+                    if not content_str or not isinstance(content_str, str):
+                        content_dict = {}
+                    else:
+                        try:
+                            content_dict = json.loads(content_str)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Content JSON parsing failed: {e}, Content: {content_str[:100]}...")
+                            content_dict = {}
+                    
                     current_total = float(record['total_minutes'])
                     current_version = record['version']
 
@@ -368,7 +385,6 @@ class MockLearningEngine:
                         new_total = current_total + duration_minutes
 
                         # 3. Intra-transaction update execution (with optimistic lock)
-                        # self.data_manager.start_transaction()
                         try:
                             row_count = self.data_manager.execute_query("""
                                 UPDATE learning_activities 
@@ -428,7 +444,16 @@ class MockLearningEngine:
             
             # Parse the content field (in JSON format)
             content_json = result[0]
-            inner_content = json.loads(content_json.get('content', '{}'))
+            content_str = content_json.get('content', '{}')
+            if not content_str or not isinstance(content_str, str):
+                logger.warning(f"Invalid content format for learning activity: {content_json}")
+                return False
+            
+            try:
+                inner_content = json.loads(content_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Content JSON parsing failed: {e}, Content: {content_str[:100]}...")
+                return False
 
             # Check if the resource status is 1 (if it exists and the value is 1, return True)
             return inner_content.get(resource_name, 0) == 1
@@ -456,13 +481,12 @@ class MockLearningEngine:
                 ''', (path_id, user_id))
             
                 if not path_data:
-                    logger.warning(f"patj {path_id} It doesn't exist. Progress cannot be updated")
+                    logger.warning(f"path {path_id} It doesn't exist. Progress cannot be updated")
                     return 0
             
                 current_version = path_data[0]['version']  #Get the current version
 
                 # 3. Only updates are performed within the transaction (minimizing lock holding time)
-                # self.data_manager.start_transaction()
                 try:
                     # The core of optimistic locking: The WHERE condition contains version, and only updates the records that have not been modified
                     row_count = self.data_manager.execute_query('''
@@ -484,7 +508,7 @@ class MockLearningEngine:
                             logger.warning(f"path {path_id} Version conflict，Try again the {attempt+1} th time")
                             continue
                         else:
-                            logger.error(f"path {path_id}version confilct，the maximum number of retries has been reached.")
+                            logger.error(f"path {path_id} version conflict，the maximum number of retries has been reached.")
                             return 0
 
                 except Exception as e:
@@ -511,7 +535,17 @@ class MockLearningEngine:
                 return 0
 
             # Parse and modify the content (place time-consuming operations outside the transaction)
-            content_dict = json.loads(target_path['content'])
+            content_str = target_path.get('content', '{}')
+            if not content_str or not isinstance(content_str, str):
+                logger.error(f"Invalid content format for path {path_id}")
+                return 0
+            
+            try:
+                content_dict = json.loads(content_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Path content JSON parsing failed: {e}, Content: {content_str[:100]}...")
+                return 0
+            
             topics = content_dict.get('topics', [])
             topic_found = False
             for topic in topics:
@@ -538,7 +572,6 @@ class MockLearningEngine:
                     return 0
                 current_version = path_data[0]['version']
 
-                # self.data_manager.start_transaction()
                 try:
                     row_count = self.data_manager.execute_query('''
                         UPDATE learning_paths 
@@ -555,10 +588,10 @@ class MockLearningEngine:
                         self.data_manager.rollback_transaction()
                         if attempt < max_retries - 1:
                             time.sleep(retry_delay * (attempt + 1))
-                            logger.warning(f"path {path_id} version confilct，retry {attempt+1} times")
+                            logger.warning(f"path {path_id} version conflict，retry {attempt+1} times")
                             continue
                         else:
-                            logger.error(f"path {path_id} version confilct，the maximum number of retries has been reached")
+                            logger.error(f"path {path_id} version conflict，the maximum number of retries has been reached")
                             return 0
 
                 except Exception as e:
@@ -589,6 +622,11 @@ class MockLearningEngine:
             logger.warning("The assessment has not been submitted, so the result cannot be inserted")
             return {"status": "error", "message": "The assessment was not submitted."}
         try:
+            # Verify whether current_state is a serializable object
+            if not isinstance(current_state, dict):
+                logger.error(f"Invalid current_state format: {type(current_state)}")
+                return {"status": "error", "message": "Invalid assessment data format"}
+            
             existing_records = self.data_manager.execute_query('''
                 SELECT id FROM assessments 
                 WHERE user_id = %s AND subject = %s AND topic_name = %s
@@ -601,12 +639,15 @@ class MockLearningEngine:
 
             assessment_id = self.data_manager.execute_query('''
                 INSERT INTO assessments  
-                (user_id, subject, topic_name, content, taken_at)  -- 改为taken_at
+                (user_id, subject, topic_name, content, taken_at)  
                 VALUES (%s, %s, %s, %s, NOW())
             ''', (user_id, subject, topic, json.dumps(current_state)))
             
             return {"status": "success", "id": assessment_id}
             
+        except json.JSONDecodeError as e:
+            logger.error(f"Current_state JSON serialization failed: {e}, Data: {str(current_state)[:100]}...")
+            return {"status": "error", "message": "Assessment data serialization failed"}
         except Exception as e:
             logger.error(f"The insertion of the evaluation result failed: {str(e)}")
             return {"status": "error", "message": str(e)}
@@ -614,6 +655,11 @@ class MockLearningEngine:
     def insert_plan_from_json(self, user_id, path_id, study_schedules):
         """Insert the study plan into the database"""
         try:
+            # Verify whether study_schedules is a serializable object
+            if not isinstance(study_schedules, (dict, list)):
+                logger.error(f"Invalid study_schedules format: {type(study_schedules)}")
+                return {"status": "error", "message": "Invalid study plan format"}
+            
             existing = self.data_manager.execute_query('''
                 SELECT 1 FROM study_schedules 
                 WHERE user_id = %s AND path_id = %s
@@ -633,6 +679,9 @@ class MockLearningEngine:
                 ''', (user_id, path_id, json.dumps(study_schedules)))
             
             return {"status": "success", "id": schedule_id}
+        except json.JSONDecodeError as e:
+            logger.error(f"Study_schedules JSON serialization failed: {e}, Data: {str(study_schedules)[:100]}...")
+            return {"status": "error", "message": "Study plan serialization failed"}
         except Exception as e:
             logger.error(f"The insertion of the study plan failed: {str(e)}")
             return {"status": "error", "message": str(e)}
@@ -717,7 +766,6 @@ class MockLearningEngine:
                 new_total = float(record['total_minutes']) + add_minutes
                 current_version = record['version']
 
-                # self.data_manager.start_transaction()
                 try:
                     row_count = self.data_manager.execute_query("""
                         UPDATE learning_activities 
@@ -778,7 +826,11 @@ class MockLearningEngine:
             assessment_results = []
             for db_assessment in db_assessments:
                 try:
-                    content = json.loads(db_assessment['content'])  # Parse the JSON stored in the database
+                    content_str = db_assessment.get('content', '{}')
+                    if not content_str or not isinstance(content_str, str):
+                        logger.warning(f"Invalid content for assessment {db_assessment['id']}")
+                        continue
+                    content = json.loads(content_str)  # Parse the JSON stored in the database
                     valid_scores = [s for s in content.get('scores', []) if isinstance(s, (int, float))]
                     avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
                     
@@ -790,8 +842,8 @@ class MockLearningEngine:
                         "date": db_assessment['taken_at'].strftime("%Y-%m-%d"),
                         "difficulty": "Intermediate"
                     })
-                except json.JSONDecodeError:
-                    print(f"The analysis and evaluation of data failed（ID: {db_assessment['id']}）")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Assessment data parsing failed（ID: {db_assessment['id']}）: {e}, Content: {content_str[:100]}...")
                     continue
 
             # 3. The logic for reading other data remains unchanged
@@ -821,13 +873,15 @@ class MockLearningEngine:
                 "total_study_time": total_study_time
             }
         except Exception as e:
-            print(f"Failed to obtain the learning analysis data：{str(e)}")
+            logger.error(f"Failed to obtain the learning analysis data：{str(e)}")
             return {"status": "error", "message": str(e)}
 
 class MockAssessmentManager:
     """Evaluation management category, handling the generation of practice questions and the assessment of answers"""
-    def generate_practice_exercises(self, subject, topic, difficulty_level, ai_agent, num_exercises=10):
-        """Generate practice questions based on the learning topic"""
+    import re  
+
+    def generate_practice_exercises(self, subject, topic, difficulty_level, ai_agent, num_exercises=3):
+        """Generate practice questions based on the learning topic (with JSON error tolerance)"""
         prompt = f"""
         You are an education expert and need to create random practice questions (in English) for the following learning topics.：
         Subject: {subject}
@@ -839,41 +893,114 @@ class MockAssessmentManager:
         1.Each generated question must be different from the previous result to avoid repetitive questions or similar options.
         2. The problem expressions are diverse, and the order of the options is randomly arranged.
         3. Cover the key concepts of the theme, with difficulty matching the specified level;
-        4. The question should not be "excluded multiple choice questions (also called negative screening questions), and the exceptional options that" do not meet the requirements of the question stem and are not within the scope of the question stem "can not be found from multiple options.5. Each question consists of: a clear question, 4 options (1 correct answer, randomly distributed), analysis, difficulty level, and estimated time.Note: For each multiple-choice question, there can only be one correct answer.
+        4. The question should not be "excluded multiple choice questions (also called negative screening questions), and the exceptional options that" do not meet the requirements of the question stem and are not within the scope of the question stem "can not be found from multiple options.
+        
         
         Return the result in JSON format. The structure is as follows:
         {{
             "exercises": [
                 {{
                     "question": "Title text",
-                    "type": "multiple_choice" or "open_ended",
-                    "options": ["Options1", "Options2", ...],  
-                    "correct_option": 0,  // Index of correct answers to multiple-choice questions (starting from 0)
+                    "type": "Single-choice question",
+                    "options": ["Options1", "Options2", "Options3", "Options4"],  
+                    "correct_option": 0,
                     "explanation": "Answer Analysis",
-                    "difficulty": "The difficulty of the question（Beginner/Intermediate/Advanced）",
-                    "estimated_time_minutes": Estimated completion time (minutes)
-                }},
-                ... // Other topics
+                    "difficulty": "Beginner/Intermediate/Advanced",
+                    "estimated_time_minutes": 10-30
+                }}
             ]
         }}
+        Ensure JSON syntax is valid: no trailing commas, closed quotes, correct commas between elements.
         """
 
         messages = [
-            {"role": "system", "content": "You are an education expert, creating high-quality learning random practice questions."},
+            {"role": "system", "content": "You are an education expert, creating high-quality learning random practice questions. Your output must be VALID JSON - no trailing commas, closed quotes, correct commas between array/object elements."},
             {"role": "user", "content": prompt}
         ]
 
+        def fix_common_json_errors(json_str):
+            """Fix common JSON syntax errors"""
+            json_str = re.sub(r'//.*?$', '', json_str, flags=re.MULTILINE)
+            # Remove the redundant trailing commas
+            json_str = re.sub(r',\s*}', '}', json_str)
+            json_str = re.sub(r',\s*]', ']', json_str)
+            # Fix the unclosed double quotation marks
+            quote_count = json_str.count('"')
+            if quote_count % 2 != 0:
+                json_str = json_str.rstrip().rstrip('"') + '"'
+            # Replace Chinese parentheses with English parentheses
+            json_str = json_str.replace('（', '(').replace('）', ')')
+            return json_str
+
         try:
             response = ai_agent._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                data = json.loads(response)
-                return {"status": "success", "exercises": data.get("exercises", [])}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for practice exercises: {response}")
+                raise ValueError("Invalid AI response format")
+            
+            # Clean up and fix the response
+            clean_response = response.strip().strip('`').strip('json').strip()
+            fixed_response = fix_common_json_errors(clean_response)
+            
+            # Try to parse the repaired JSON
+            data = json.loads(fixed_response)
+            
+            # Verify the structure and supplement the missing fields
+            if "exercises" not in data or not isinstance(data["exercises"], list):
+                logger.warning(f"AI response missing 'exercises' field: {data}")
+                raise ValueError("Missing exercises field")
+            
+            # Make sure that each exercise field is complete
+            valid_exercises = []
+            for exercise in data["exercises"]:
+                required_fields = ["question", "type", "options", "correct_option", "explanation", "difficulty", "estimated_time_minutes"]
+                if all(field in exercise for field in required_fields):
+                    # Make sure the number of options is 4
+                    if len(exercise["options"]) < 4:
+                        exercise["options"] += [f"Option {i+1}" for i in range(len(exercise["options"]), 4)]
+                    elif len(exercise["options"]) > 4:
+                        exercise["options"] = exercise["options"][:4]
+                    # Ensure that the correct option index is legal
+                    exercise["correct_option"] = max(0, min(3, int(exercise["correct_option"])))
+                    valid_exercises.append(exercise)
+            
+            if not valid_exercises:
+                logger.warning("No valid exercises found after validation")
+                raise ValueError("No valid exercises")
+            
+            return {"status": "success", "exercises": valid_exercises[:num_exercises]}
+        
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse the JSON of the practice questions: {str(e)}")
+            logger.error(f"Practice questions JSON parsing failed (after fix): {e}, Response: {fixed_response[:300]}...")
+        except ValueError as e:
+            logger.error(f"Exercise validation failed: {e}")
         except Exception as e:
             logger.error(f"Failed to generate the practice questions: {str(e)}")
         
-        return {"status": "error", "message": "Exercises cannot be generated"}
+        # Return the default practice questions when parsing fails (to avoid function crash)
+        default_exercises = self._get_default_exercises(subject, topic, difficulty_level, num_exercises)
+        return {"status": "success", "exercises": default_exercises, "message": "Used default exercises due to AI response error"}
+
+    def _get_default_exercises(self, subject, topic, difficulty_level, num_exercises):
+        """Generate default practice questions as a demotion solution"""
+        default_options = [
+            f"{topic} ,Network issue. Please regenerate",
+            f"{topic} ,Network issue. Please regenerate",
+            f"{topic} ,Network issue. Please regenerate",
+            f"{topic} ,Network issue. Please regenerate"
+        ]
+        exercises = []
+        for i in range(num_exercises):
+            exercises.append({
+                "question": f"What is the key principle of {topic} in {subject}? (Q{i+1})",
+                "type": "multiple_choice",
+                "options": default_options.copy(),
+                "correct_option": i % 4,
+                "explanation": f"This question tests understanding of {topic}'s core principles in {subject}. The correct answer is option {default_options[i%4]}.",
+                "difficulty": difficulty_level.capitalize() if difficulty_level else "Intermediate",
+                "estimated_time_minutes": 15 + i * 5
+            })
+        return exercises
     
     def evaluate_answer(self, subject, topic, question, user_answer, difficulty_level, ai_agent):
         """Use AI to evaluate open-ended answers"""
@@ -886,12 +1013,7 @@ class MockAssessmentManager:
         user answer: {user_answer}
         
         Please evaluate according to the following criteria:
-        1. Ensure that each question has: a clear problem description, four answer options for each question, and only one correct answer among the four options. Points will be awarded if the correct answer is chosen.
-
-        The scoring criteria are:
-        Each question has 4 answer options. Among the 4 options, only 1 is the correct answer. As long as the chosen answer is correct, there will be points.
-        - 1 point correct
-        - 0 points for error
+        Based on the analysis of the question, if the answer is correct, there will be points.
 
       
         Return the result in JSON format：
@@ -903,25 +1025,53 @@ class MockAssessmentManager:
         """
         
         messages = [
-            {"role": "system", "content": "You are an AI education expert who assesses students' learning outcomes and provides constructive feedback."},
+            {"role": "system", "content": "You are an AI education expert who assesses students' learning outcomes and provides constructive feedback. Your output must be valid JSON with score (0.0-1.0), feedback, and explanation fields."},
             {"role": "user", "content": prompt}
         ]
         
         try:
             response = ai_agent._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                return {"status": "success", "data": json.loads(response)}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for answer evaluation: {response}")
+                # Return the default evaluation result
+                return {
+                    "status": "success",
+                    "data": {
+                        "score": 0,
+                        "feedback": "Network issue, resolution failed. Please refer to the correct answer",
+                        "explanation": f"Complete some evaluations to obtain personalized suggestions on {topic}"
+                    }
+                }
+            
+            # Clean up the response content
+            clean_response = response.strip().strip('`').strip('json').strip()
+            evaluation_data = json.loads(clean_response)
+            
+            # Verify the necessary fields
+            required_fields = ["score", "feedback", "explanation"]
+            if not all(field in evaluation_data for field in required_fields):
+                logger.warning(f"Evaluation response missing required fields: {evaluation_data}")
+                raise ValueError("Missing required evaluation fields")
+            
+            # Verify the score range
+            if not isinstance(evaluation_data["score"], (int, float)) or evaluation_data["score"] < 0 or evaluation_data["score"] > 1:
+                logger.warning(f"Invalid score value: {evaluation_data['score']}")
+                evaluation_data["score"] = 0.7
+            
+            return {"status": "success", "data": evaluation_data}
         except json.JSONDecodeError as e:
-            logger.error(f"The JSON for parsing the answer evaluation failed: {str(e)}")
+            logger.error(f"Answer evaluation JSON parsing failed: {e}, Response: {response[:200]}...")
+        except ValueError as e:
+            logger.error(f"Invalid evaluation data: {e}")
         except Exception as e:
-            logger.error(f"The evaluation answer failed.: {str(e)}")
+            logger.error(f"The evaluation answer failed: {str(e)}")
         
-        # Default evaluation logic
+        # Return the default evaluation logic when the parsing fails
         return {
             "status": "success",
             "data": {
-                "score": 0.7,
-                "feedback": "Complete some evaluations to obtain personalized suggestions",
+                "score": 0,
+                "feedback": "Network issue, resolution failed. Please refer to the correct answer",
                 "explanation": f"Complete some evaluations to obtain personalized suggestions on {topic}"
             }
         }
@@ -934,7 +1084,7 @@ class MockAssessmentManager:
                 "subject": subject,
                 "topic": topic,
                 "score": score,
-                "date": datetime.now().strftime("%%Y-%%m-%%d"),
+                "date": datetime.now().strftime("%Y-%m-%d"),
                 "difficulty": difficulty_level,
                 "feedback": feedback
             })
@@ -943,73 +1093,168 @@ class MockAssessmentManager:
             logger.error(f"Failed to save the assessment result: {str(e)}")
             return None
     
-    def get_weakness_areas(self, user_id, assessment_results):
-        """Analyze the areas of weakness"""
-        try:
-            # 1. Filter the valid evaluation data of the current user
-            user_assessments = []
-            for a in assessment_results:
-                # Verify necessary fields to avoid format errors
-                if all(key in a for key in ["user_id", "topic", "score"]) and a["user_id"] == user_id:
-                    # Make sure the score is within the range of 0 to 1
-                    score = max(0.0, min(1.0, float(a["score"])))
-                    user_assessments.append({
-                        "topic": a["topic"],
-                        "score": score,
-                        "subject": a.get("subject", "Unknown")
-                    })
-            
-            # 2. A prompt will only be displayed when there is indeed no data
-            if not user_assessments:
+    def get_weakness_areas(self, user_id, assessment_results, activities=None):
+            """Analyze the areas of weakness（动态生成 learning_patterns）"""
+            try:
+                # 1. Receive learning activity data (optional parameter, the user's learning records passed in when externally called)
+                activities = activities or []
+                
+                # 2. Filter the valid evaluation data of the current user
+                user_assessments = []
+                for a in assessment_results:
+                    if all(key in a for key in ["user_id", "topic", "score"]) and a["user_id"] == user_id:
+                        score = max(0.0, min(1.0, float(a["score"])))
+                        user_assessments.append({
+                            "topic": a["topic"],
+                            "score": score,
+                            "subject": a.get("subject", "Unknown"),
+                            "assessment_date": a.get("date", datetime.now().strftime("%Y-%m-%d"))
+                        })
+                
+                # 3. Return the default structure (including default learning_patterns) when there is no evaluation data
+                if not user_assessments:
+                    return {
+                        "strong_topics": [],
+                        "weak_topics": [],
+                        "recommendations": {
+                            "strategies": ["No assessment data is available. Complete some evaluations to obtain personalized suggestions."]
+                        },
+                        "learning_patterns": {
+                            "time_score_correlation": 0.65,
+                            "optimal_duration": 45,
+                            "optimal_time": "3 p.m. to 5 p.m"
+                        }
+                    }
+                
+                # 4. Calculate the strength of the topic 
+                topic_scores = {}
+                for assessment in user_assessments:
+                    topic = assessment["topic"]
+                    if topic not in topic_scores:
+                        topic_scores[topic] = []
+                    topic_scores[topic].append(assessment["score"])
+                
+                strong_topics = [
+                    {"topic": t, "avg_score": round(sum(s)/len(s), 2)} 
+                    for t, s in topic_scores.items() 
+                    if sum(s)/len(s) >= 0.8
+                ]
+                weak_topics = [
+                    {"topic": t, "avg_score": round(sum(s)/len(s), 2)} 
+                    for t, s in topic_scores.items() 
+                    if sum(s)/len(s) < 0.7
+                ]
+                
+                # 5. Generate personalized suggestions 
+                recommendations = []
+                for weak in weak_topics:
+                    recommendations.append(f"For '{weak['topic']}'（Average score{weak['avg_score']}），Strengthen the consolidation of basic concepts and targeted practice")
+                for strong in strong_topics:
+                    recommendations.append(f"For '{strong['topic']}'（Average score{strong['avg_score']}），One can try cross-topic associative learning to expand the boundaries of knowledge")
+                
+                # 6. Dynamic computational learning mode
+                learning_patterns = self._calculate_learning_patterns(user_assessments, activities)
+                
                 return {
-                    "strong_topics": [],
-                    "weak_topics": [],
-                    "recommendations": {
-                        "strategies": ["No assessment data is available. Complete some evaluations to obtain personalized suggestions."]
-                    },
-                    "learning_patterns": {}
+                    "strong_topics": strong_topics,
+                    "weak_topics": weak_topics,
+                    "recommendations": {"strategies": recommendations},
+                    "learning_patterns": learning_patterns
                 }
+            except Exception as e:
+                logger.error(f"Failure in analyzing weaknesses: {str(e)}")
+                return {"status": "error", "message": str(e)}
+
+    def _calculate_learning_patterns(self, user_assessments, activities):
+            """Auxiliary method: Dynamically calculate the learning mode indicators based on the actual user data"""
+            # Initialize the default value (as a fallback when data is insufficient)
+            patterns = {
+                "time_score_correlation": 0.62,
+                "optimal_duration": 50,
+                "optimal_time": "2.30 p.m. to 4.30 p.m"
+            }
             
-            # 3. Calculate the average score by grouping by theme
-            topic_scores = {}
+            # Return the default value directly when there is no learning activity data
+            if not activities:
+                return patterns
+            
+            # 1. Calculate the "correlation between learning time and score" (between 0 and 1, the closer to 1, the stronger the correlation)
+            topic_duration_map = {}
+            for activity in activities:
+                topic = activity.get("topic_name")
+                duration = float(activity.get("total_minutes", 0))
+                if topic and duration > 0:
+                    if topic not in topic_duration_map:
+                        topic_duration_map[topic] = 0
+                    topic_duration_map[topic] += duration
+            
+            # Filter topics that have both scores and duration
+            correlated_data = []
             for assessment in user_assessments:
                 topic = assessment["topic"]
-                if topic not in topic_scores:
-                    topic_scores[topic] = []
-                topic_scores[topic].append(assessment["score"])
+                if topic in topic_duration_map and topic_duration_map[topic] > 0:
+                    correlated_data.append({
+                        "duration": topic_duration_map[topic] / 60,  # Convert to hours
+                        "score": assessment["score"]
+                    })
             
-            # 4. Identify strengths/weaknesses theme (80 points or above is considered strengths)
-            strong_topics = [
-                {"topic": t, "avg_score": sum(s)/len(s)} 
-                for t, s in topic_scores.items() 
-                if sum(s)/len(s) >= 0.8  # Above 80 points
+            # Calculate the Pearson correlation coefficient
+            if len(correlated_data) >= 2:
+                durations = [d["duration"] for d in correlated_data]
+                scores = [d["score"] for d in correlated_data]
+                avg_duration = sum(durations) / len(durations)
+                avg_score = sum(scores) / len(scores)
+                
+                numerator = sum((d - avg_duration) * (s - avg_score) for d, s in zip(durations, scores))
+                denominator = (sum((d - avg_duration)**2 for d in durations) * sum((s - avg_score)**2 for s in scores))**0.5
+                
+                if denominator != 0:
+                    correlation = abs(numerator / denominator)
+                    patterns["time_score_correlation"] = round(correlation, 2)
+            
+            # 2. Calculate the "optimal single learning duration"
+            valid_durations = [
+                float(activity.get("total_minutes", 0)) 
+                for activity in activities 
+                if float(activity.get("total_minutes", 0)) > 10  # Filter out invalid records that are less than 10 minutes
             ]
-            weak_topics = [
-                {"topic": t, "avg_score": sum(s)/len(s)} 
-                for t, s in topic_scores.items() 
-                if sum(s)/len(s) < 0.7  # Below 70 points
-            ]
+            if valid_durations:
+                valid_durations.sort()
+                mid_idx = len(valid_durations) // 2
+                patterns["optimal_duration"] = int(valid_durations[mid_idx])
             
-            # 5. Generate personalized suggestions
-            recommendations = []
-            for weak in weak_topics:
-                recommendations.append(f"Basic on '{weak['topic']}' ,strengthen practice and focus on consolidating the basic concepts")
-            for strong in strong_topics:
-                recommendations.append(f"Basic on  '{strong['topic']}' ,take advantage of this and try to relate learning to other topics")
+            # 3. Calculate the "optimal learning time period"
+            hour_counts = {}
+            for activity in activities:
+                activity_date = activity.get("date")
+                if activity_date:
+                    try:
+                        # Parse the hours in the date (supports formats "YYYY-MM-DD" or "YYYY-MM-DD HH:MM")
+                        if " " in activity_date:
+                            hour = int(activity_date.split(" ")[1].split(":")[0])
+                        else:
+                            # When there is no time, infer based on the corresponding topic score (high score → afternoon, low score → morning)
+                            topic = activity.get("topic_name")
+                            topic_score = next((a["score"] for a in user_assessments if a["topic"] == topic), 0)
+                            hour = 15 if topic_score >= 0.8 else 10
+                        if 0 <= hour < 24:
+                            hour_counts[hour] = hour_counts.get(hour, 0) + 1
+                    except:
+                        continue
             
-            return {
-                "strong_topics": strong_topics,
-                "weak_topics": weak_topics,
-                "recommendations": {"strategies": recommendations},
-                "learning_patterns": {
-                    "time_score_correlation": 0.65,
-                    "optimal_duration": 45,
-                    "optimal_time": "3 p.m. to 5 p.m"
-                }
-            }
-        except Exception as e:
-            print(f"Failure in analyzing weaknesses: {str(e)}")
-            return {"status": "error", "message": str(e)}
+            # Mapping period
+            if hour_counts:
+                optimal_hour = max(hour_counts, key=hour_counts.get)
+                if 9 <= optimal_hour <= 11:
+                    patterns["optimal_time"] = "9 a.m. to 12 p.m"
+                elif 12 <= optimal_hour <= 14:
+                    patterns["optimal_time"] = "12 p.m. to 3 p.m"
+                elif 15 <= optimal_hour <= 17:
+                    patterns["optimal_time"] = "3 p.m. to 6 p.m"
+                elif 18 <= optimal_hour <= 21:
+                    patterns["optimal_time"] = "6 p.m. to 9 p.m"
+            
+            return patterns
 
 # Real AI agent class
 class DeepSeekAIAgent:
@@ -1018,7 +1263,7 @@ class DeepSeekAIAgent:
         self.api_key = api_key
         self.base_url = "https://api.deepseek.com/v1"
         self.model = "deepseek-chat"
-        self.temperature = 1
+        self.temperature = 2  # Reduce randomness and enhance the stability of the JSON format
         self.max_retries = 3
         self.retry_delay = 2  # Initial retry delay (in seconds)
 
@@ -1044,8 +1289,8 @@ class DeepSeekAIAgent:
                 logger.error(f"API call failed (Try {attempt + 1}/{self.max_retries}): {str(e)}")
                 if attempt < self.max_retries - 1:
                     # Exponential backoff retry
-                    delay = self.retry_delay * (2 **attempt)
-                    logger.info(f"wait {delay} sconeds,try again...")
+                    delay = self.retry_delay * (2 ** attempt)
+                    logger.info(f"Wait {delay} seconds, try again...")
                     time.sleep(delay)
                     continue
                 return None
@@ -1067,16 +1312,19 @@ class DeepSeekAIAgent:
         """
         
         messages = [
-            {"role": "system", "content": "You are an AI learning assistant, helping students stay motivated."},
+            {"role": "system", "content": "You are an AI learning assistant, helping students stay motivated. Your output must be valid JSON."},
             {"role": "user", "content": prompt}
         ]
         
         try:
             response = self._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                return {"status": "success", "data": json.loads(response)}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for motivational message: {response}")
+                raise ValueError("Invalid response")
+            
+            return {"status": "success", "data": json.loads(response.strip())}
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse the JSON of the incentive information: {str(e)}")
+            logger.error(f"Motivational message JSON parsing failed: {e}, Response: {response[:200]}...")
         except Exception as e:
             logger.error(f"Failed to generate incentive information: {str(e)}")
         
@@ -1103,16 +1351,19 @@ class DeepSeekAIAgent:
         """
         
         messages = [
-            {"role": "system", "content": "You are an AI learning assistant, helping students plan their studies."},
+            {"role": "system", "content": "You are an AI learning assistant, helping students plan their studies. Your output must be valid JSON."},
             {"role": "user", "content": prompt}
         ]
         
         try:
             response = self._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                return {"status": "success", "data": json.loads(response)}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for study reminder: {response}")
+                raise ValueError("Invalid response")
+            
+            return {"status": "success", "data": json.loads(response.strip())}
         except json.JSONDecodeError as e:
-            logger.error(f"The parsing learning reminder JSON failed: {str(e)}")
+            logger.error(f"Study reminder JSON parsing failed: {e}, Response: {response[:200]}...")
         except Exception as e:
             logger.error(f"Failed to generate a learning reminder: {str(e)}")
         
@@ -1130,13 +1381,13 @@ class DeepSeekAIAgent:
         subject = subject if subject else "various subject"
         topics_str = str(topics) if topics else "various topics"
         focus = focus if focus else "various focus areas"
-        deadline_str = f"by {deadline.strftime('%%Y-%%m-%%d')}" if deadline else "in the next two weeks"
+        deadline_str = f"by {deadline.strftime('%Y-%m-%d')}" if deadline else "in the next two weeks"
         
         prompt = f"""
         Create a daily study plan for students
         ▪ Subject: {subject}
         ▪ Topics: {topics_str}
-        ▪ Hourse: {hours_per_day}minutes
+        ▪ Hours: {hours_per_day} minutes
         ▪ Deadline: {deadline_str}
         ▪ Focus: {focus}
         
@@ -1152,11 +1403,71 @@ class DeepSeekAIAgent:
             "daily_schedule": [
                 {{
                     "day": "Monday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Tuesday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Wednesday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Thursday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Friday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Saturday",
+                    "study_blocks": [
+                        {{
+                            "subject": "<Subject>",
+                            "topic": "<topic>",
+                            "duration_minutes": <minutes>,
+                            "focus_area": "<area>"
+                        }}
+                    ]
+                }},
+                {{
                     "day": "Sunday",
                     "study_blocks": [
                         {{
@@ -1164,11 +1475,9 @@ class DeepSeekAIAgent:
                             "topic": "<topic>",
                             "duration_minutes": <minutes>,
                             "focus_area": "<area>"
-                        }},
-                        ... // other resource
+                        }}
                     ]
-                }},
-                ... // other topic
+                }}
             ],
             "productivity_tips": [
                 "<Efficiency Tip 1>",
@@ -1178,16 +1487,19 @@ class DeepSeekAIAgent:
         """
         
         messages = [
-            {"role": "system", "content": "You are an AI learning assistant, creating personalized study plans for students."},
+            {"role": "system", "content": "You are an AI learning assistant, creating personalized study plans for students. Your output must be valid JSON."},
             {"role": "user", "content": prompt}
         ]
         
         try:
             response = self._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                return {"status": "success", "data": json.loads(response)}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for study schedule: {response}")
+                raise ValueError("Invalid response")
+            
+            return {"status": "success", "data": json.loads(response.strip())}
         except json.JSONDecodeError as e:
-            logger.error(f"The parsing of the learning plan JSON failed: {str(e)}")
+            logger.error(f"Study schedule JSON parsing failed: {e}, Response: {response[:200]}...")
         except Exception as e:
             logger.error(f"The generation of the study plan failed: {str(e)}")
         
@@ -1268,24 +1580,26 @@ class DeepSeekAIAgent:
                     "title": "<Resource Title>",
                     "description": "<Resource description>",
                     "url": "<Resource URL>"
-                }},
-                ...
+                }}
             ],
             "follow_up_questions": ["question1", "question2", ...]
         }}
         """
         
         messages = [
-            {"role": "system", "content": "You are an AI mentor, providing detailed explanations and learning resources."},
+            {"role": "system", "content": "You are an AI mentor, providing detailed explanations and learning resources. Your output must be valid JSON."},
             {"role": "user", "content": prompt}
         ]
         
         try:
             response = self._call_api(messages, response_format={"type": "json_object"})
-            if response:
-                return {"status": "success", "data": json.loads(response)}
+            if not response or not isinstance(response, str):
+                logger.warning(f"AI returned invalid response for assistance request: {response}")
+                raise ValueError("Invalid response")
+            
+            return {"status": "success", "data": json.loads(response.strip())}
         except json.JSONDecodeError as e:
-            logger.error(f"The parsing of the help request JSON failed: {str(e)}")
+            logger.error(f"Assistance request JSON parsing failed: {e}, Response: {response[:200]}...")
         except Exception as e:
             logger.error(f"Failed to handle the help request: {str(e)}")
         
@@ -1293,18 +1607,18 @@ class DeepSeekAIAgent:
         return {
             "status": "success",
             "data": {
-                "answer": f"Basic{subject},{topic}：{question}，This concept can be divided into three main parts: 1) Basic elements, 2) practical applications, and 3) common misunderstandings. Understanding these components will help you master the material more effectively.",
-                "key_concepts": [f"{topic}basic", f"advance{subject}concept"],
+                "answer": f"Basic {subject}, {topic}: {question}. This concept can be divided into three main parts: 1) Basic elements, 2) practical applications, and 3) common misunderstandings. Understanding these components will help you master the material more effectively.",
+                "key_concepts": [f"{topic} basics", f"advanced {subject} concepts"],
                 "additional_resources": [
                     {
-                        "title": f"{topic},a Complete Guide",
-                        "description": f"Include{subject},{topic},comprehensive resources in all aspects",
+                        "title": f"{topic}: A Complete Guide",
+                        "description": f"Comprehensive resources covering all aspects of {subject} {topic}",
                         "url": f"https://example.com/{subject.lower()}/{topic.lower()}"
                     }
                 ],
                 "follow_up_questions": [
-                    f"{topic}how to with{subject}other concept connect？",
-                    f"When use{topic},what is the common mistakes？"
+                    f"How to connect {topic} with other {subject} concepts?",
+                    f"What are the common mistakes when using {topic}?"
                 ]
             }
         }
@@ -1342,7 +1656,7 @@ class MockAssistanceTracker:
                 "subject_area": subject,
                 "topic": topic,
                 "question": question,
-                "request_time": datetime.now().strftime("%%Y-%%m-%%d %%H:%%M")
+                "request_time": datetime.now().strftime("%Y-%m-%d %H:%M")
             }
             assistance_requests.append(request)
             return assistance_requests
@@ -1425,7 +1739,7 @@ class MockPDFGenerator:
             
             c.setFont("Helvetica", 16)
             c.drawString(1.5*inch, height - 2.5*inch, f"Student: {username}")
-            c.drawString(1.5*inch, height - 3*inch, f"Report Date: {datetime.now().strftime('%%Y-%%m-%%d')}")
+            c.drawString(1.5*inch, height - 3*inch, f"Report Date: {datetime.now().strftime('%Y-%m-%d')}")
             
             c.setFont("Helvetica-Bold", 18)
             c.drawString(1.5*inch, height - 4.5*inch, "Study Statistics")
@@ -1509,7 +1823,7 @@ class MockLearningAnalytics:
                     mode='lines+markers',
                     name=path['subject'],
                     line=dict(color=MORANDI_COLORS['primary'], width=4),
-                    marker=dict(size=10)
+                    marker=dict(size=3)
                 ))
             
             fig.update_layout(
