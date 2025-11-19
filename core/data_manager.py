@@ -2,6 +2,7 @@ import MySQLdb
 import MySQLdb.cursors
 import os
 import json
+import time
 from datetime import datetime, timedelta
 from functools import lru_cache
 from dbutils.pooled_db import PooledDB
@@ -23,6 +24,7 @@ class DataManager:
     """Data Manager - 单例模式 + 延迟初始化连接池"""
     _instance = None
     _pool = None  # 连接池实例，延迟初始化
+    _table_initialized = False  # 表初始化标记
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -30,7 +32,11 @@ class DataManager:
             cls._instance.config = Config.POOL_CONFIG
             cls._instance.connection = None
             cls._instance.cursor = None
-            cls._instance._initialize_pool()  # 初始化连接池（延迟）
+            # 先初始化连接池
+            cls._instance._initialize_pool()
+            # 延迟确保连接池就绪
+            time.sleep(1)
+            # 初始化表结构
             cls._instance._initialize_database()
         return cls._instance
 
@@ -123,181 +129,197 @@ class DataManager:
             self.connection = None
             self.cursor = None
     
-
     def _initialize_database(self):
-        """初始化数据库表结构（包含旧表version字段补充）"""
-        # 确保连接和游标有效
-        if not self._pool and not self.connection:
-            self._connect()
-        
-        # 关键检查：如果游标不存在，直接返回，避免后续报错
-        if not self.cursor or not self.connection:
-            print("数据库连接或游标初始化失败，无法初始化表结构")
+        """初始化数据库表结构（独立获取连接，兼容连接池）"""
+        if self._table_initialized:
             return
-        
+            
+        # 强制从连接池或创建新连接
+        current_conn = None
         try:
-            # User Table
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE,
-                    password VARCHAR(255),
-                    email VARCHAR(100) UNIQUE,
-                    full_name VARCHAR(100),
-                    interests TEXT,
-                    learning_style TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_login TIMESTAMP NULL,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    version INT DEFAULT 1  -- 添加缺失的version字段
+            if self._pool:
+                current_conn = self._pool.connection()
+                print("从连接池获取连接进行表初始化")
+            else:
+                # 备用方案：直接创建连接
+                current_conn = MySQLdb.connect(
+                    host=self.config['host'],
+                    user=self.config['user'],
+                    passwd=self.config['password'],
+                    db=self.config['database'],
+                    port=self.config['port'],
+                    connect_timeout=10,
+                    cursorclass=MySQLdb.cursors.DictCursor
                 )
-            ''')
-            
-            # Learning Path table
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS learning_paths (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,
-                    subject VARCHAR(100),
-                    progress FLOAT DEFAULT 0.0,
-                    difficulty_level VARCHAR(10),
-                    content JSON,
-                    target_completion_date DATE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    is_active BOOLEAN DEFAULT FALSE,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_user_id_subject (user_id, subject),
-                    INDEX idx_last_updated (last_updated)
-                )
-            ''')
-            
-            # Learning Activity Schedule
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS learning_activities (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,
-                    path_id INT,
-                    topic_name VARCHAR(100),
-                    progress FLOAT DEFAULT 0.0,
-                    total_score FLOAT DEFAULT 0.0,
-                    total_minutes DECIMAL(10,2) DEFAULT 0.00,
-                    content JSON,
-                    activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
-                    INDEX idx_user_id_activity_date (user_id, activity_date)
-                )
-            ''')
-            
-            # Evaluation Form
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS assessments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,
-                    subject VARCHAR(100),
-                    topic_name VARCHAR(100),
-                    content JSON,  
-                    taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  
-                    INDEX idx_user_id_subject_topic_name (user_id, subject, topic_name) 
-                )
-            ''')
-            
-            # Path Evaluation Form
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS path_assessments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    learning_path_id INT,
-                    user_id INT,
-                    question TEXT,
-                    user_answer TEXT,
-                    score FLOAT,
-                    feedback TEXT,
-                    difficulty_level VARCHAR(10),
-                    question_type VARCHAR(10),
-                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_learning_path_id (learning_path_id)
-                )
-            ''')
-            
-            # Certificate Form
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS certifications (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,
-                    learning_path_id INT,
-                    completion_date DATE,
-                    certificate_number VARCHAR(50) UNIQUE,
-                    recipient_name VARCHAR(100),
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
-                    INDEX idx_user_id_cert_date (user_id, completion_date)
-                )
-            ''')
-            
-            # Learning Habits Chart
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS study_streaks (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT UNIQUE,
-                    current_streak_days INT DEFAULT 0,
-                    longest_streak_days INT DEFAULT 0,
-                    last_study_date DATE,
-                    version INT DEFAULT 1  -- 添加缺失的version字段
-                )
-            ''')
-            
-            # Study Schedule
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS study_schedules (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT,
-                    path_id INT,
-                    schedule_json JSON,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
-                    INDEX idx_user_id_path_id (user_id, path_id)
-                )
-            ''')
-            
-            # ========== 新增：为已有表补充version字段（关键修复） ==========
-            alter_queries = [
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE learning_paths ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE learning_activities ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE path_assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE certifications ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE study_streaks ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                "ALTER TABLE study_schedules ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-            ]
-            for alter_query in alter_queries:
-                self.cursor.execute(alter_query)
-            
-            self.connection.commit()
-            print("Table structure initialization completed (including version field supplement)")
+                print("直接创建连接进行表初始化")
+
+            with current_conn.cursor() as cursor:
+                # User Table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        username VARCHAR(50) UNIQUE,
+                        password VARCHAR(255),
+                        email VARCHAR(100) UNIQUE,
+                        full_name VARCHAR(100),
+                        interests TEXT,
+                        learning_style TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_login TIMESTAMP NULL,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        version INT DEFAULT 1
+                    )
+                ''')
+                
+                # Learning Path table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS learning_paths (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT,
+                        subject VARCHAR(100),
+                        progress FLOAT DEFAULT 0.0,
+                        difficulty_level VARCHAR(10),
+                        content JSON,
+                        target_completion_date DATE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        is_active BOOLEAN DEFAULT FALSE,
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        INDEX idx_user_id_subject (user_id, subject),
+                        INDEX idx_last_updated (last_updated)
+                    )
+                ''')
+                
+                # Learning Activity Schedule
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS learning_activities (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT,
+                        path_id INT,
+                        topic_name VARCHAR(100),
+                        progress FLOAT DEFAULT 0.0,
+                        total_score FLOAT DEFAULT 0.0,
+                        total_minutes DECIMAL(10,2) DEFAULT 0.00,
+                        content JSON,
+                        activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
+                        INDEX idx_user_id_activity_date (user_id, activity_date)
+                    )
+                ''')
+                
+                # Evaluation Form
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS assessments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT,
+                        subject VARCHAR(100),
+                        topic_name VARCHAR(100),
+                        content JSON,  
+                        taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  
+                        INDEX idx_user_id_subject_topic_name (user_id, subject, topic_name) 
+                    )
+                ''')
+                
+                # Path Evaluation Form
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS path_assessments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        learning_path_id INT,
+                        user_id INT,
+                        question TEXT,
+                        user_answer TEXT,
+                        score FLOAT,
+                        feedback TEXT,
+                        difficulty_level VARCHAR(10),
+                        question_type VARCHAR(10),
+                        completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        INDEX idx_learning_path_id (learning_path_id)
+                    )
+                ''')
+                
+                # Certificate Form
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS certifications (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT,
+                        learning_path_id INT,
+                        completion_date DATE,
+                        certificate_number VARCHAR(50) UNIQUE,
+                        recipient_name VARCHAR(100),
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
+                        INDEX idx_user_id_cert_date (user_id, completion_date)
+                    )
+                ''')
+                
+                # Learning Habits Chart
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS study_streaks (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT UNIQUE,
+                        current_streak_days INT DEFAULT 0,
+                        longest_streak_days INT DEFAULT 0,
+                        last_study_date DATE,
+                        version INT DEFAULT 1
+                    )
+                ''')
+                
+                # Study Schedule
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS study_schedules (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT,
+                        path_id INT,
+                        schedule_json JSON,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        version INT DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
+                        INDEX idx_user_id_path_id (user_id, path_id)
+                    )
+                ''')
+
+                # 强制补充version字段（兼容旧表）
+                alter_queries = [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE learning_paths ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE learning_activities ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE path_assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE certifications ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE study_streaks ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                    "ALTER TABLE study_schedules ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                ]
+                for alter_query in alter_queries:
+                    cursor.execute(alter_query)
+
+            current_conn.commit()
+            self._table_initialized = True
+            print("表结构初始化（含version字段）完成！")
+
         except MySQLdb.Error as e:
-            print(f"Initialization table structure error: {e}")
-            if self.connection:  # 确保connection存在再回滚
-                self.connection.rollback()
+            print(f"表结构初始化失败: {e}")
+            if current_conn:
+                current_conn.rollback()
         finally:
-            # 关闭游标，避免资源泄漏
-            if self.cursor:
-                self.cursor.close()
-                self.cursor = None
+            if current_conn:
+                current_conn.close()
     
     def execute_query(self, query, params=None, commit=True):
-        """Execute the query with reconnect logic"""
+        """Execute the query with reconnect logic + 表初始化检查"""
+        # 确保表已初始化
+        if not self._table_initialized:
+            self._initialize_database()
+
         max_reconnect = 2
         reconnect_count = 0
 
@@ -357,6 +379,10 @@ class DataManager:
     
     def execute_batch(self, query, data, commit=True):
         """Perform batch insertion"""
+        # 确保表已初始化
+        if not self._table_initialized:
+            self._initialize_database()
+            
         try:
             current_conn = None
             if self._pool:
