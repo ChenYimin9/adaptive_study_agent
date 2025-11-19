@@ -13,7 +13,7 @@ class Config:
         'user': os.environ.get('MYSQLUSER', 'root'),
         'password': os.environ.get('MYSQLPASSWORD', '123456'),  # 修改为你的密码默认值
         'database': os.environ.get('MYSQLDATABASE', 'railway'),
-        'port': int(os.environ.get('MYSQLPORT', 3306)),
+        'port': int(os.environ.get('MYSQLPORT', 33060)),
         'maxconnections': 5,  # 最大连接数
         'mincached': 2,       # 初始化时创建的空闲连接数
         'cursorclass': MySQLdb.cursors.DictCursor
