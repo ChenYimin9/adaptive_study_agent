@@ -1,5 +1,5 @@
 import MySQLdb
-import MySQLdb.cursors  # Used for the dictionary type Cursor
+import MySQLdb.cursors
 import os
 import json
 from datetime import datetime, timedelta
@@ -11,42 +11,46 @@ class Config:
     POOL_CONFIG = {
         'host': os.environ.get('MYSQLHOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQLUSER', 'root'),
-        'password': os.environ.get('MYSQLPASSWORD', 'TbmMjnfScHMmjVuLyGGEWbENvudftkPt'),  # 修改为你的密码默认值
+        'password': os.environ.get('MYSQLPASSWORD', 'TbmMjnfScHMmjVuLyGGEWbENvudftkPt'),
         'database': os.environ.get('MYSQLDATABASE', 'railway'),
         'port': int(os.environ.get('MYSQLPORT', 33869)),
-        'maxconnections': 5,  # 最大连接数
-        'mincached': 2,       # 初始化时创建的空闲连接数
+        'maxconnections': 5,
+        'mincached': 2,
         'cursorclass': MySQLdb.cursors.DictCursor
     }
-    pool = PooledDB(MySQLdb, **POOL_CONFIG)
 
 class DataManager:
-    def _connect(self):
-        # 从连接池获取连接
-        self.connection = Config.pool.connection()
-        self.cursor = self.connection.cursor()
-
-class DataManager:
-    """Data Manager"""
-    _instance = None  # Singleton instance storage
+    """Data Manager - 单例模式 + 延迟初始化连接池"""
+    _instance = None
+    _pool = None  # 连接池实例，延迟初始化
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(DataManager, cls).__new__(cls)
-            cls._instance.config = Config.POOL_CONFIG  # 注意此处原代码可能笔误，调整为POOL_CONFIG
+            cls._instance.config = Config.POOL_CONFIG
             cls._instance.connection = None
             cls._instance.cursor = None
-            cls._instance._connect()
+            cls._instance._initialize_pool()  # 初始化连接池（延迟）
             cls._instance._initialize_database()
         return cls._instance
+
+    def _initialize_pool(self):
+        """延迟初始化连接池，避免服务启动时连接失败"""
+        try:
+            self._pool = PooledDB(MySQLdb, **self.config)
+            print("数据库连接池初始化成功")
+        except MySQLdb.OperationalError as e:
+            print(f"连接池初始化失败: {e}")
+            # 不直接抛出异常，允许后续重试
+            self._pool = None
 
     # Transaction-related methods
     def start_transaction(self):
         try:
-            if not self.connection or not self.connection.open:  # MySQLdb uses open to determine whether a connection is valid
+            if not self.connection or not self.connection.open:
                 self._connect()
-            self.connection.autocommit(False)  # Turn off auto-commit and enable transactions
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            self.connection.autocommit(False)
+        except MySQLdb.Error as e:
             print(f"Error in starting a transaction: {e}")
             return False
         return True
@@ -56,7 +60,7 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.commit()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+        except MySQLdb.Error as e:
             print(f"Transaction submission error: {e}")
             return False
         return True
@@ -66,33 +70,39 @@ class DataManager:
             if self.connection and self.connection.open:
                 self.connection.rollback()
                 self.connection.autocommit = True
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+        except MySQLdb.Error as e:
             print(f"Rollback transaction error: {e}")
             return False
         return True
         
     def _connect(self):
-        """Establish a database connection"""
+        """从连接池获取连接（优先使用连接池）"""
         try:
-            # 从配置中读取端口，适配Railway环境变量
-            self.connection = MySQLdb.connect(
-                host=self.config['host'],
-                user=self.config['user'],
-                passwd=self.config['password'],  
-                db=self.config['database'],     
-                port=self.config['port'],                      # 显式使用配置的端口
-                connect_timeout=10,             # Connection timeout
-                cursorclass=MySQLdb.cursors.DictCursor  # Return dictionary type result
-            )
-                   
-            # Create a Cursor
+            # 如果连接池已初始化，优先从连接池获取
+            if self._pool:
+                self.connection = self._pool.connection()
+                print(f"从连接池获取连接成功（ThreadID: {self.connection.thread_id()}）")
+            else:
+                # 备用方案：直接创建连接
+                self.connection = MySQLdb.connect(
+                    host=self.config['host'],
+                    user=self.config['user'],
+                    passwd=self.config['password'],
+                    db=self.config['database'],
+                    port=self.config['port'],
+                    connect_timeout=10,
+                    cursorclass=MySQLdb.cursors.DictCursor
+                )
+                print(f"直接创建连接成功（ThreadID: {self.connection.thread_id()}）")
+            
             self.cursor = self.connection.cursor()
-            print(f"Database connection successful.（ThreadID: {self.connection.thread_id()}）")
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            
+        except MySQLdb.Error as e:
             error_msg = str(e)
-            print(f"Database connection error: {error_msg}")
+            print(f"数据库连接错误: {error_msg}")
+            
+            # 处理数据库不存在的情况
             if "Unknown database" in error_msg:
-                # Temporary connection to create database
                 temp_conn = MySQLdb.connect(
                     host=self.config['host'],
                     user=self.config['user'],
@@ -104,18 +114,18 @@ class DataManager:
                 temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
                 temp_cursor.close()
                 temp_conn.close()
-                print(f"Database {self.config['database']} created successfully. Reconnect...")
-                self._connect()  # Reconnect
-            # Clear invalid connection objects
+                print(f"数据库 {self.config['database']} 创建成功，重新连接...")
+                self._connect()
+            
             self.connection = None
             self.cursor = None
     
     def _initialize_database(self):
-        """Initialize the database table structure"""
-        if not self.cursor or not self.connection.open:  # MySQLdb uses "open" to determine connections
-             self._connect()
-             if not self.cursor:
-                print("Database connection failed, unable to initialize table structure")
+        """初始化数据库表结构"""
+        if not self._pool and not self.connection:
+            self._connect()
+            if not self.cursor:
+                print("数据库连接失败，无法初始化表结构")
                 return
         
         try:
@@ -248,51 +258,53 @@ class DataManager:
             
             self.connection.commit()
             print("Table structure initialization completed")
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+        except MySQLdb.Error as e:
             print(f"Initialization table structure error: {e}")
             self.connection.rollback()
     
     def execute_query(self, query, params=None, commit=True):
-        """Execute the query: Modify connection validity judgment, exception type, and Cursor syntax"""
+        """Execute the query with reconnect logic"""
         max_reconnect = 2
         reconnect_count = 0
 
         while reconnect_count < max_reconnect:
             try:
-                # Connection validity determination: MySQLdb uses open
-                if not self.connection or not self.connection.open:
+                # 优先使用连接池获取连接
+                if self._pool:
+                    self.connection = self._pool.connection()
+                elif not self.connection or not self.connection.open:
                     print(f"Connection failed. Trying to reconnect（Attempt {reconnect_count+1}）")
                     self._connect()
                     if not self.connection or not self.connection.open:
                         reconnect_count += 1
                         continue
 
-                # Execute query
-                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:  # Explicitly specify dictionary Cursor
+                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:
                     cursor.execute(query, params or ())
                 
                     if query.strip().upper().startswith('SELECT'):
-                        return cursor.fetchall()
+                        result = cursor.fetchall()
                     elif query.strip().upper().startswith('INSERT'):
                         result = cursor.lastrowid
-                        if commit and self.connection.autocommit:
+                        if commit:
                             self.connection.commit()
-                        return result
                     else:
-                        if commit and self.connection.autocommit:
+                        result = cursor.rowcount
+                        if commit:
                             self.connection.commit()
-                        return cursor.rowcount
+                    
+                    return result
 
-            except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+            except MySQLdb.Error as e:
                 error_msg = str(e)
                 print(f"Query execution error: {error_msg}")
-                # Connection error judgment
+                
                 if any(keyword in error_msg for keyword in ["Lost connection", "Connection refused", "not connected"]):
                     reconnect_count += 1
                     self.connection = None
                     self.cursor = None
                     continue
-                # Transaction rollback
+                
                 if self.connection and not self.connection.autocommit:
                     self.rollback_transaction()
                 return False
@@ -302,9 +314,11 @@ class DataManager:
 
     
     def execute_batch(self, query, data, commit=True):
-        """Perform batch insertion: Modify connection judgment and exception type"""
+        """Perform batch insertion"""
         try:
-            if not self.connection.open:
+            if self._pool:
+                self.connection = self._pool.connection()
+            elif not self.connection.open:
                 self._connect()
                 
             with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:
@@ -314,7 +328,7 @@ class DataManager:
                     self.connection.commit()
                 return cursor.rowcount
                 
-        except MySQLdb.Error as e:  # Change the exception type to MySQLdb.Error
+        except MySQLdb.Error as e:
             print(f"Batch query execution error: {e}")
             self.connection.rollback()
             return False
