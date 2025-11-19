@@ -1,3 +1,4 @@
+# Import various libraries
 import MySQLdb
 import MySQLdb.cursors
 import os
@@ -8,7 +9,7 @@ from functools import lru_cache
 from dbutils.pooled_db import PooledDB
 
 class Config:
-    # 连接池配置
+    # Connection pool configuration
     POOL_CONFIG = {
         'host': os.environ.get('MYSQLHOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQLUSER', 'root'),
@@ -21,10 +22,10 @@ class Config:
     }
 
 class DataManager:
-    """Data Manager - 单例模式 + 延迟初始化连接池"""
+    """Data Manager - Singleton pattern + delayed initialization of the connection pool"""
     _instance = None
-    _pool = None  # 连接池实例，延迟初始化
-    _table_initialized = False  # 表初始化标记
+    _pool = None  # Connection pool instance, deferred initialization
+    _table_initialized = False  # Table initialization tag
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -32,22 +33,22 @@ class DataManager:
             cls._instance.config = Config.POOL_CONFIG
             cls._instance.connection = None
             cls._instance.cursor = None
-            # 先初始化连接池
+            # Initialize the connection pool first
             cls._instance._initialize_pool()
-            # 延迟确保连接池就绪
+            # Delay ensures that the connection pool is ready
             time.sleep(1)
-            # 初始化表结构
+            # Initialize the table structure
             cls._instance._initialize_database()
         return cls._instance
 
     def _initialize_pool(self):
-        """延迟初始化连接池，避免服务启动时连接失败"""
+        """Delay the initialization of the connection pool to prevent connection failures when the service starts"""
         try:
             self._pool = PooledDB(MySQLdb,** self.config)
-            print("数据库连接池初始化成功")
+            print("The database connection pool has been initialized successfully")
         except MySQLdb.OperationalError as e:
-            print(f"连接池初始化失败: {e}")
-            # 不直接抛出异常，允许后续重试
+            print(f"The connection pool initialization failed: {e}")
+            # Do not directly throw an exception and allow subsequent retries
             self._pool = None
 
     # Transaction-related methods
@@ -55,7 +56,7 @@ class DataManager:
         try:
             if not self.connection or not self.connection.open:
                 self._connect()
-            # 使用方法调用而非属性赋值，兼容连接池连接对象
+            # Use method calls instead of property assignments to be compatible with the connection pool to connect objects
             self.connection.set_autocommit(False)
         except MySQLdb.Error as e:
             print(f"Error in starting a transaction: {e}")
@@ -66,7 +67,7 @@ class DataManager:
         try:
             if self.connection and self.connection.open:
                 self.connection.commit()
-                # 使用方法调用而非属性赋值
+                # Use method calls instead of attribute assignments
                 self.connection.set_autocommit(True)
         except MySQLdb.Error as e:
             print(f"Transaction submission error: {e}")
@@ -77,7 +78,7 @@ class DataManager:
         try:
             if self.connection and self.connection.open:
                 self.connection.rollback()
-                # 使用方法调用而非属性赋值
+                # Use method calls instead of attribute assignments
                 self.connection.set_autocommit(True)
         except MySQLdb.Error as e:
             print(f"Rollback transaction error: {e}")
@@ -85,14 +86,14 @@ class DataManager:
         return True
         
     def _connect(self):
-        """从连接池获取连接（优先使用连接池）"""
+        """Obtain a connection from the connection pool (use the connection pool first)"""
         try:
-            # 如果连接池已初始化，优先从连接池获取
+            # If the connection pool has been initialized, obtain it from the connection pool first
             if self._pool:
                 self.connection = self._pool.connection()
                 print(f"从连接池获取连接成功（ThreadID: {self.connection.thread_id()}）")
             else:
-                # 备用方案：直接创建连接
+                # Alternative solution: Create a connection directly
                 self.connection = MySQLdb.connect(
                     host=self.config['host'],
                     user=self.config['user'],
@@ -102,15 +103,15 @@ class DataManager:
                     connect_timeout=10,
                     cursorclass=MySQLdb.cursors.DictCursor
                 )
-                print(f"直接创建连接成功（ThreadID: {self.connection.thread_id()}）")
+                print(f"The connection was directly created successfully（ThreadID: {self.connection.thread_id()}）")
             
             self.cursor = self.connection.cursor()
             
         except MySQLdb.Error as e:
             error_msg = str(e)
-            print(f"数据库连接错误: {error_msg}")
+            print(f"Database connection error: {error_msg}")
             
-            # 处理数据库不存在的情况
+            # Handle situations where the database does not exist
             if "Unknown database" in error_msg:
                 temp_conn = MySQLdb.connect(
                     host=self.config['host'],
@@ -123,14 +124,14 @@ class DataManager:
                 temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config['database']}")
                 temp_cursor.close()
                 temp_conn.close()
-                print(f"数据库 {self.config['database']} 创建成功，重新连接...")
+                print(f"Database {self.config['database']} Creation successful. Reconnect...")
                 self._connect()
             
             self.connection = None
             self.cursor = None
     
     def _check_column_exists(self, cursor, table_name, column_name):
-        """检查字段是否存在（兼容DictCursor）"""
+        """Check if the field exists (compatible with DictCursor)"""
         cursor.execute("""
             SELECT COUNT(*) AS count 
             FROM information_schema.columns 
@@ -142,18 +143,18 @@ class DataManager:
         return result['count'] > 0 if result else False
     
     def _initialize_database(self):
-        """初始化数据库表结构（兼容低版本MySQL和DictCursor）"""
+        """Initialize the database table structure (compatible with lower versions of MySQL and DictCursor)"""
         if self._table_initialized:
             return
             
-        # 强制从连接池或创建新连接
+        # Force a connection from the connection pool or create a new connection
         current_conn = None
         try:
             if self._pool:
                 current_conn = self._pool.connection()
-                print("从连接池获取连接进行表初始化")
+                print("Obtain a connection from the connection pool for table initialization")
             else:
-                # 备用方案：直接创建连接
+                # Alternative solution: Create a connection directly
                 current_conn = MySQLdb.connect(
                     host=self.config['host'],
                     user=self.config['user'],
@@ -163,7 +164,7 @@ class DataManager:
                     connect_timeout=10,
                     cursorclass=MySQLdb.cursors.DictCursor
                 )
-                print("直接创建连接进行表初始化")
+                print("Create a connection directly for table initialization")
 
             with current_conn.cursor() as cursor:
                 # User Table
@@ -300,7 +301,7 @@ class DataManager:
                     )
                 ''')
 
-                # ========== 兼容低版本MySQL：检查并添加version字段 ==========
+                # ========== Compatible with lower versions of MySQL: Check and add the version field ==========
                 tables = [
                     'users', 'learning_paths', 'learning_activities', 
                     'assessments', 'path_assessments', 'certifications', 
@@ -309,14 +310,14 @@ class DataManager:
                 for table in tables:
                     if not self._check_column_exists(cursor, table, 'version'):
                         cursor.execute(f"ALTER TABLE {table} ADD COLUMN version INT DEFAULT 1")
-                        print(f"为表 {table} 添加version字段")
+                        print(f"For table, {table} ,add version")
 
             current_conn.commit()
             self._table_initialized = True
-            print("表结构初始化（含version字段）完成！")
+            print("The table structure initialization (including the version field) has been completed!")
 
         except MySQLdb.Error as e:
-            print(f"表结构初始化失败: {e}")
+            print(f"The table structure initialization failed: {e}")
             if current_conn:
                 current_conn.rollback()
         finally:
@@ -324,8 +325,8 @@ class DataManager:
                 current_conn.close()
     
     def execute_query(self, query, params=None, commit=True):
-        """Execute the query with reconnect logic + 表初始化检查"""
-        # 确保表已初始化
+        """Execute the query with reconnect logic + Table initialization check"""
+        # Make sure the table has been initialized
         if not self._table_initialized:
             self._initialize_database()
 
@@ -335,7 +336,7 @@ class DataManager:
         while reconnect_count < max_reconnect:
             try:
                 current_conn = None
-                # 优先使用连接池获取连接
+                # Give priority to using the connection pool to obtain connections
                 if self._pool:
                     current_conn = self._pool.connection()
                 elif not self.connection or not self.connection.open:
@@ -374,7 +375,7 @@ class DataManager:
                     self.cursor = None
                     continue
                 
-                # 使用getattr安全检查autocommit状态
+                # Use getattr security to check the autocommit status
                 if current_conn and not getattr(current_conn, 'autocommit', True):
                     try:
                         current_conn.rollback()
@@ -388,7 +389,7 @@ class DataManager:
     
     def execute_batch(self, query, data, commit=True):
         """Perform batch insertion"""
-        # 确保表已初始化
+        # Make sure the table has been initialized
         if not self._table_initialized:
             self._initialize_database()
             
