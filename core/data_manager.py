@@ -43,7 +43,7 @@ class DataManager:
     def _initialize_pool(self):
         """延迟初始化连接池，避免服务启动时连接失败"""
         try:
-            self._pool = PooledDB(MySQLdb, **self.config)
+            self._pool = PooledDB(MySQLdb,** self.config)
             print("数据库连接池初始化成功")
         except MySQLdb.OperationalError as e:
             print(f"连接池初始化失败: {e}")
@@ -130,18 +130,19 @@ class DataManager:
             self.cursor = None
     
     def _check_column_exists(self, cursor, table_name, column_name):
-        """检查字段是否存在（兼容低版本MySQL）"""
+        """检查字段是否存在（兼容DictCursor）"""
         cursor.execute("""
-            SELECT COUNT(*) 
+            SELECT COUNT(*) AS count 
             FROM information_schema.columns 
             WHERE table_schema = DATABASE() 
             AND table_name = %s 
             AND column_name = %s
         """, (table_name, column_name))
-        return cursor.fetchone()[0] > 0
+        result = cursor.fetchone()
+        return result['count'] > 0 if result else False
     
     def _initialize_database(self):
-        """初始化数据库表结构（兼容低版本MySQL）"""
+        """初始化数据库表结构（兼容低版本MySQL和DictCursor）"""
         if self._table_initialized:
             return
             
