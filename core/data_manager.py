@@ -129,8 +129,19 @@ class DataManager:
             self.connection = None
             self.cursor = None
     
+    def _check_column_exists(self, cursor, table_name, column_name):
+        """检查字段是否存在（兼容低版本MySQL）"""
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.columns 
+            WHERE table_schema = DATABASE() 
+            AND table_name = %s 
+            AND column_name = %s
+        """, (table_name, column_name))
+        return cursor.fetchone()[0] > 0
+    
     def _initialize_database(self):
-        """初始化数据库表结构（独立获取连接，兼容连接池）"""
+        """初始化数据库表结构（兼容低版本MySQL）"""
         if self._table_initialized:
             return
             
@@ -288,19 +299,16 @@ class DataManager:
                     )
                 ''')
 
-                # 强制补充version字段（兼容旧表）
-                alter_queries = [
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE learning_paths ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE learning_activities ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE path_assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE certifications ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE study_streaks ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
-                    "ALTER TABLE study_schedules ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                # ========== 兼容低版本MySQL：检查并添加version字段 ==========
+                tables = [
+                    'users', 'learning_paths', 'learning_activities', 
+                    'assessments', 'path_assessments', 'certifications', 
+                    'study_streaks', 'study_schedules'
                 ]
-                for alter_query in alter_queries:
-                    cursor.execute(alter_query)
+                for table in tables:
+                    if not self._check_column_exists(cursor, table, 'version'):
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN version INT DEFAULT 1")
+                        print(f"为表 {table} 添加version字段")
 
             current_conn.commit()
             self._table_initialized = True
