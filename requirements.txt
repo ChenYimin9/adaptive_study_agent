@@ -28,3 +28,5 @@ python-dateutil>=2.8.2  # Extended Date and Time processing (pandas dependency)
 pytz>=2024.1  # Time zone processing
 
 streamlit-autorefresh>=0.1.1  
+
+DBUtils==2.0 
