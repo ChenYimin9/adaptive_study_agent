@@ -37,7 +37,7 @@ class DataManager:
     def _initialize_pool(self):
         """延迟初始化连接池，避免服务启动时连接失败"""
         try:
-            self._pool = PooledDB(MySQLdb, **self.config)
+            self._pool = PooledDB(MySQLdb,** self.config)
             print("数据库连接池初始化成功")
         except MySQLdb.OperationalError as e:
             print(f"连接池初始化失败: {e}")
@@ -147,8 +147,7 @@ class DataManager:
                     learning_style TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP NULL,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    version INT DEFAULT 1  -- 添加缺失的version字段
+                    is_active BOOLEAN DEFAULT TRUE
                 )
             ''')
             
@@ -165,7 +164,6 @@ class DataManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT FALSE,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_user_id_subject (user_id, subject),
                     INDEX idx_last_updated (last_updated)
@@ -184,7 +182,6 @@ class DataManager:
                     total_minutes DECIMAL(10,2) DEFAULT 0.00,
                     content JSON,
                     activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_activity_date (user_id, activity_date)
@@ -200,7 +197,6 @@ class DataManager:
                     topic_name VARCHAR(100),
                     content JSON,  
                     taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  
                     INDEX idx_user_id_subject_topic_name (user_id, subject, topic_name) 
                 )
@@ -219,7 +215,6 @@ class DataManager:
                     difficulty_level VARCHAR(10),
                     question_type VARCHAR(10),
                     completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_learning_path_id (learning_path_id)
@@ -235,7 +230,6 @@ class DataManager:
                     completion_date DATE,
                     certificate_number VARCHAR(50) UNIQUE,
                     recipient_name VARCHAR(100),
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_cert_date (user_id, completion_date)
@@ -249,8 +243,7 @@ class DataManager:
                     user_id INT UNIQUE,
                     current_streak_days INT DEFAULT 0,
                     longest_streak_days INT DEFAULT 0,
-                    last_study_date DATE,
-                    version INT DEFAULT 1  -- 添加缺失的version字段
+                    last_study_date DATE
                 )
             ''')
             
@@ -262,7 +255,6 @@ class DataManager:
                     path_id INT,
                     schedule_json JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_path_id (user_id, path_id)
