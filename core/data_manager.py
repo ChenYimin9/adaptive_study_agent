@@ -13,7 +13,7 @@ class Config:
         'user': os.environ.get('MYSQLUSER', 'root'),
         'password': os.environ.get('MYSQLPASSWORD', 'TbmMjnfScHMmjVuLyGGEWbENvudftkPt'),
         'database': os.environ.get('MYSQLDATABASE', 'railway'),
-        'port': int(os.environ.get('MYSQLPORT', 33869)),
+        'port': int(os.environ.get('MYSQLPORT', 3306)),
         'maxconnections': 5,
         'mincached': 2,
         'cursorclass': MySQLdb.cursors.DictCursor
@@ -49,7 +49,8 @@ class DataManager:
         try:
             if not self.connection or not self.connection.open:
                 self._connect()
-            self.connection.autocommit(False)
+            # 使用方法调用而非属性赋值，兼容连接池连接对象
+            self.connection.set_autocommit(False)
         except MySQLdb.Error as e:
             print(f"Error in starting a transaction: {e}")
             return False
@@ -59,7 +60,8 @@ class DataManager:
         try:
             if self.connection and self.connection.open:
                 self.connection.commit()
-                self.connection.autocommit = True
+                # 使用方法调用而非属性赋值
+                self.connection.set_autocommit(True)
         except MySQLdb.Error as e:
             print(f"Transaction submission error: {e}")
             return False
@@ -69,7 +71,8 @@ class DataManager:
         try:
             if self.connection and self.connection.open:
                 self.connection.rollback()
-                self.connection.autocommit = True
+                # 使用方法调用而非属性赋值
+                self.connection.set_autocommit(True)
         except MySQLdb.Error as e:
             print(f"Rollback transaction error: {e}")
             return False
@@ -122,11 +125,14 @@ class DataManager:
     
     def _initialize_database(self):
         """初始化数据库表结构"""
+        # 确保连接和游标有效
         if not self._pool and not self.connection:
             self._connect()
-            if not self.cursor:
-                print("数据库连接失败，无法初始化表结构")
-                return
+        
+        # 关键检查：如果游标不存在，直接返回，避免后续报错
+        if not self.cursor or not self.connection:
+            print("数据库连接或游标初始化失败，无法初始化表结构")
+            return
         
         try:
             # User Table
@@ -141,7 +147,8 @@ class DataManager:
                     learning_style TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP NULL,
-                    is_active BOOLEAN DEFAULT TRUE
+                    is_active BOOLEAN DEFAULT TRUE,
+                    version INT DEFAULT 1  -- 添加缺失的version字段
                 )
             ''')
             
@@ -158,6 +165,7 @@ class DataManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT FALSE,
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_user_id_subject (user_id, subject),
                     INDEX idx_last_updated (last_updated)
@@ -176,6 +184,7 @@ class DataManager:
                     total_minutes DECIMAL(10,2) DEFAULT 0.00,
                     content JSON,
                     activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_activity_date (user_id, activity_date)
@@ -191,6 +200,7 @@ class DataManager:
                     topic_name VARCHAR(100),
                     content JSON,  
                     taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,  
                     INDEX idx_user_id_subject_topic_name (user_id, subject, topic_name) 
                 )
@@ -209,6 +219,7 @@ class DataManager:
                     difficulty_level VARCHAR(10),
                     question_type VARCHAR(10),
                     completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_learning_path_id (learning_path_id)
@@ -224,6 +235,7 @@ class DataManager:
                     completion_date DATE,
                     certificate_number VARCHAR(50) UNIQUE,
                     recipient_name VARCHAR(100),
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_cert_date (user_id, completion_date)
@@ -238,7 +250,7 @@ class DataManager:
                     current_streak_days INT DEFAULT 0,
                     longest_streak_days INT DEFAULT 0,
                     last_study_date DATE,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    version INT DEFAULT 1  -- 添加缺失的version字段
                 )
             ''')
             
@@ -250,6 +262,7 @@ class DataManager:
                     path_id INT,
                     schedule_json JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    version INT DEFAULT 1,  -- 添加缺失的version字段
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (path_id) REFERENCES learning_paths(id) ON DELETE CASCADE,
                     INDEX idx_user_id_path_id (user_id, path_id)
@@ -260,7 +273,13 @@ class DataManager:
             print("Table structure initialization completed")
         except MySQLdb.Error as e:
             print(f"Initialization table structure error: {e}")
-            self.connection.rollback()
+            if self.connection:  # 确保connection存在再回滚
+                self.connection.rollback()
+        finally:
+            # 关闭游标，避免资源泄漏
+            if self.cursor:
+                self.cursor.close()
+                self.cursor = None
     
     def execute_query(self, query, params=None, commit=True):
         """Execute the query with reconnect logic"""
@@ -269,17 +288,21 @@ class DataManager:
 
         while reconnect_count < max_reconnect:
             try:
+                current_conn = None
                 # 优先使用连接池获取连接
                 if self._pool:
-                    self.connection = self._pool.connection()
+                    current_conn = self._pool.connection()
                 elif not self.connection or not self.connection.open:
                     print(f"Connection failed. Trying to reconnect（Attempt {reconnect_count+1}）")
                     self._connect()
-                    if not self.connection or not self.connection.open:
+                    current_conn = self.connection
+                    if not current_conn or not current_conn.open:
                         reconnect_count += 1
                         continue
+                else:
+                    current_conn = self.connection
 
-                with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:
+                with current_conn.cursor(MySQLdb.cursors.DictCursor) as cursor:
                     cursor.execute(query, params or ())
                 
                     if query.strip().upper().startswith('SELECT'):
@@ -287,11 +310,11 @@ class DataManager:
                     elif query.strip().upper().startswith('INSERT'):
                         result = cursor.lastrowid
                         if commit:
-                            self.connection.commit()
+                            current_conn.commit()
                     else:
                         result = cursor.rowcount
                         if commit:
-                            self.connection.commit()
+                            current_conn.commit()
                     
                     return result
 
@@ -305,8 +328,12 @@ class DataManager:
                     self.cursor = None
                     continue
                 
-                if self.connection and not self.connection.autocommit:
-                    self.rollback_transaction()
+                # 使用getattr安全检查autocommit状态
+                if current_conn and not getattr(current_conn, 'autocommit', True):
+                    try:
+                        current_conn.rollback()
+                    except:
+                        pass
                 return False
     
         print(f"Failed after {max_reconnect} reconnection attempts")
@@ -316,21 +343,31 @@ class DataManager:
     def execute_batch(self, query, data, commit=True):
         """Perform batch insertion"""
         try:
+            current_conn = None
             if self._pool:
-                self.connection = self._pool.connection()
-            elif not self.connection.open:
+                current_conn = self._pool.connection()
+            elif not self.connection or not self.connection.open:
                 self._connect()
+                current_conn = self.connection
                 
-            with self.connection.cursor(MySQLdb.cursors.DictCursor) as cursor:
+            if not current_conn:
+                print("No valid database connection available")
+                return False
+                
+            with current_conn.cursor(MySQLdb.cursors.DictCursor) as cursor:
                 cursor.executemany(query, data)
                 
                 if commit:
-                    self.connection.commit()
+                    current_conn.commit()
                 return cursor.rowcount
                 
         except MySQLdb.Error as e:
             print(f"Batch query execution error: {e}")
-            self.connection.rollback()
+            if current_conn:
+                try:
+                    current_conn.rollback()
+                except:
+                    pass
             return False
     
     def get_user_by_id(self, user_id):
