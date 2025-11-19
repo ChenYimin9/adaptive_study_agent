@@ -9,9 +9,9 @@ from dbutils.pooled_db import PooledDB
 class Config:
     # 连接池配置
     POOL_CONFIG = {
-        'host': os.environ.get('MYSQLHOST', 'localhost'),
+        'host': os.environ.get('MYSQLHOST', 'mysql.railway.internal'),
         'user': os.environ.get('MYSQLUSER', 'root'),
-        'password': os.environ.get('MYSQLPASSWORD', 'TbmMjnfScHMmjVuLyGGEWbENvudftkPt'),
+        'password': os.environ.get('MYSQLPASSWORD', '123456'),  # 修改为你的密码默认值
         'database': os.environ.get('MYSQLDATABASE', 'railway'),
         'port': int(os.environ.get('MYSQLPORT', 3306)),
         'maxconnections': 5,  # 最大连接数
@@ -33,7 +33,7 @@ class DataManager:
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super(DataManager, cls).__new__(cls)
-            cls._instance.config = Config.DB_CONFIG
+            cls._instance.config = Config.POOL_CONFIG  # 注意此处原代码可能笔误，调整为POOL_CONFIG
             cls._instance.connection = None
             cls._instance.cursor = None
             cls._instance._connect()
