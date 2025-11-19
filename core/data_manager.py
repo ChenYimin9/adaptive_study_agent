@@ -123,8 +123,9 @@ class DataManager:
             self.connection = None
             self.cursor = None
     
+
     def _initialize_database(self):
-        """初始化数据库表结构"""
+        """初始化数据库表结构（包含旧表version字段补充）"""
         # 确保连接和游标有效
         if not self._pool and not self.connection:
             self._connect()
@@ -269,8 +270,22 @@ class DataManager:
                 )
             ''')
             
+            # ========== 新增：为已有表补充version字段（关键修复） ==========
+            alter_queries = [
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE learning_paths ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE learning_activities ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE path_assessments ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE certifications ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE study_streaks ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+                "ALTER TABLE study_schedules ADD COLUMN IF NOT EXISTS version INT DEFAULT 1",
+            ]
+            for alter_query in alter_queries:
+                self.cursor.execute(alter_query)
+            
             self.connection.commit()
-            print("Table structure initialization completed")
+            print("Table structure initialization completed (including version field supplement)")
         except MySQLdb.Error as e:
             print(f"Initialization table structure error: {e}")
             if self.connection:  # 确保connection存在再回滚
