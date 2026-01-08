@@ -1627,7 +1627,7 @@ class DeepSeekAIAgent:
         """Handle dialogue interactions with students"""
         system_message = {
             "role": "system", 
-            "content": "You are an AI learning assistant, named ASC (Adaptive Study Companion). You help students learn various subjects, answer questions and provide explanations. Please keep your answers clear and detailed, and answer users' questions in Chinese."
+            "content": "You are an AI learning assistant, named ASC (Adaptive Study Companion). You help students learn various subjects, answer questions and provide explanations. Please keep your answers clear and detailed, and answer users' questions in English."
         }
         
         # Build a complete dialogue history (including system messages)
