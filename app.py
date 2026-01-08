@@ -929,7 +929,7 @@ def show_learning_path():
                                     
                                     questions_result = assessment_manager.generate_practice_exercises(
                                         path['subject'], topic['name'], path['difficulty_level'],
-                                        st.session_state.ai_agent, num_exercises=15
+                                        st.session_state.ai_agent, num_exercises=10
                                     )
                                     
                                     if not questions_result or questions_result["status"] != "success" or len(questions_result["exercises"]) == 0:
