@@ -1279,7 +1279,7 @@ class DeepSeekAIAgent:
         self.api_key = api_key
         self.base_url = "https://api.deepseek.com/v1"
         self.model = "deepseek-chat"
-        self.temperature = 0.2  # Reduce randomness and enhance the stability of the JSON format
+        self.temperature = 1  # Reduce randomness and enhance the stability of the JSON format
         self.max_retries = 3
         self.retry_delay = 2  # Initial retry delay (in seconds)
 
