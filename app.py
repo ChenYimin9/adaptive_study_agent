@@ -726,7 +726,7 @@ def show_dashboard():
                     if not analytics.get('assessments') 
                     else "We found your assessment results but couldn't generate recommendations. Please try again.")
 
-# Learning Path Page
+# Learning Path Page(xxlj)
 def show_learning_path():
     # Initialize the backend timing
     init_backend_timer()
@@ -798,7 +798,7 @@ def show_learning_path():
             
             st.write("*Overall progress is based on completed topics (requires assessment score ≥80%)*")
         
-        # Upload Materials
+        # Upload Materials(scwj)
         if path_id in st.session_state.uploaded_materials:
             st.subheader("Uploaded Study Materials")
             for mat_idx, material in enumerate(st.session_state.uploaded_materials[path_id]):
@@ -843,7 +843,7 @@ def show_learning_path():
                         else:
                             st.info("No assessment completed yet")
                     
-                    # Resource List
+                    # Resource List(zygl yck)
                     st.subheader("Resources")
                     for j, res in enumerate(topic.get('resources', [])):
                         st.markdown("---")
@@ -890,11 +890,11 @@ def show_learning_path():
                     
                     st.write("You must score 80% or higher to complete this topic:")
                     col1, col2, col3, col4 = st.columns(4)
-                    with col1: use_saved = st.button("My-Assessment", key=f"use_saved_{i}")
+                    with col1: use_saved = st.button("The Last Assessment", key=f"use_saved_{i}")
                     with col2: generate_new = st.button("Re-Assessment", key=f"generate_new_{i}")
                     with col3: save_current = st.button("Save Assessment", key=f"save_current_{i}")
                     with col4: delete_saved = st.button("Delete Saved", key=f"delete_saved_{i}")
-
+                    # scxtm
                     if generate_new:
                         if st.session_state.assessment_generating[topic_key]:
                             st.info("The system has crashed. Please do not click multiple times. It is recommended to log in again")
@@ -1018,7 +1018,7 @@ def show_learning_path():
                                 current_state['feedback'] = json.loads(state_content['content'])['feedback']
                                 valid_scores = [s for s in current_state['scores'] if isinstance(s, (int, float))]
                                 current_state['total_score'] = (sum(valid_scores)/len(valid_scores)*100) if valid_scores else 0.0
-                        
+                        # (pghd)
                         with st.form(f"assessment_form_{full_topic_key}", clear_on_submit=False):
                             for idx, q in enumerate(questions):
                                 with st.container():
@@ -1147,7 +1147,7 @@ def show_learning_path():
                 with st.expander(f"Day {milestone['expected_completion_day']}: {milestone['name']}"):
                     st.write(f"**Criteria:** {milestone['assessment_criteria']}")
         
-        # Path Completion judgment
+        # Path Completion judgment(ljwc)
         if path['progress'] >= 0.99:
             path_ids = [p['id'] for p in st.session_state.completed_paths]
             if path['id'] not in path_ids:
@@ -1640,7 +1640,7 @@ def show_planner():
                     "productivity_tips": ai_plan.get('productivity_tips', []),
                     "basic_info": {
                         "subject": selected_path["subject"],
-                        "daily_hours": f"{daily_hours}hours",
+                        "daily_hours": f"{daily_hours}hour",
                         "deadline": deadline.strftime("%Y-%m-%d"),
                         "generated_time": datetime.now().strftime("%Y-%m-%d %H:%M")
                     }

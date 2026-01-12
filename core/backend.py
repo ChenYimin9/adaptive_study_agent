@@ -223,7 +223,6 @@ class MockLearningEngine:
             ]
         }
 
-    
     def _generate_ai_learning_path(self, subject, user_interests, learning_style, difficulty, target_days, ai_agent):
         """Use AI to generate personalized learning paths, including correctly formatted urls"""
         prompt = f"""
@@ -285,7 +284,7 @@ class MockLearningEngine:
         (1)The unique challenges of this discipline
         (2)The specified difficulty level
         (3)Best knowledge retention
-
+        
         Format your response in a valid JSON format with the exact structure as follows:
         {{
             "topics": [
@@ -1298,7 +1297,7 @@ class DeepSeekAIAgent:
                     messages=messages,
                     temperature=self.temperature,
                     response_format=response_format,
-                    timeout=60  # 60-second timeout
+                    timeout=80  # 80-second timeout
                 )
                 return response.choices[0].message.content
             except Exception as e:
