@@ -223,6 +223,7 @@ class MockLearningEngine:
             ]
         }
 
+    
     def _generate_ai_learning_path(self, subject, user_interests, learning_style, difficulty, target_days, ai_agent):
         """Use AI to generate personalized learning paths, including correctly formatted urls"""
         prompt = f"""
@@ -236,39 +237,54 @@ class MockLearningEngine:
 
         The learning path must include educational resources suitable for learners of {learning_style}.
         The learning path must be logically progressive, starting from basic concepts and gradually advancing to more complex topics.
+        
+        # Discipline-Specific Granularity & Path Adaptation Rules
+        The learning path shall be tailored to the discipline category with differentiated knowledge granularity, content progression logic, and resource weight allocation, as follows:
+        
+        1. For STEM disciplines (e.g., Artificial Intelligence, Data Science)
+        - Split the core knowledge into 8 fine-grained sub-topics, structured in a three-stage progression: Theory → Hands-on Practice → Extension & Innovation
+        - Resource weight allocation: 30% theoretical resources (academic papers, textbooks), 40% hands-on resources (tutorials, coding platforms, labs), 30% extension resources (cutting-edge research, industry projects)
+        - The 8 sub-topics shall be evenly distributed across the three stages to ensure progressive mastery.
+        
+        2.For Business disciplines (e.g., Marketing, Management)
+        - Split the core knowledge into 3 core modules, focused on a three-dimensional progression: Theoretical Framework → Industry Case Analysis → Decision-Making Simulation
+        - Resource weight allocation: 20% theoretical resources (frameworks, models), 50% case resources (real-world cases, case studies), 30% simulation resources (business simulation tools, role-play scenarios)
+        - The 3 modules shall be designed to realize the transformation from "knowing" to "applying".
+
+        3.For Finance disciplines (e.g., Financial Analysis, FinTech)
+        - Split the core knowledge into 5 medium-grained nodes, balanced in a three-directional progression: Foundation → Application → Cross-Boundary Integration
+        - Resource weight allocation: 35% foundational resources (principles, regulations), 35% application resources (data analysis tools, investment strategies), 30% cross-boundary resources (FinTech convergence, interdisciplinary practices)
+        - The 5 nodes shall connect theoretical basics with practical scenarios and cross-field applications.
+        
         It should include the following components:
-        
-        1. 3 to 5 main themes, comprehensively covering the discipline
-        - Each topic must have a clear and descriptive title
-        - Provide a detailed explanation of the content covered by this topic (3-5 sentences)
-        - Appropriate duration allocation (the total is approximately {target_days} days)
-        - 3-5 high-quality learning resources, including:
-            * Descriptive title
-            * Resource types (videos, articles, interactions, etc.)
-            * A detailed description of content/value
-            * Source/Platform name (e.g., Coursera, YouTube, Medium, Khan Academy)
-            * The URL format is [Platform base URL] + search query related to the resource
-            - Example：
-                - https://www.coursera.org/search?query={subject}+fundamentals
-                - https://www.youtube.com/results?search_query={subject}+tutorial
-                - https://medium.com/search?q={subject}+advanced+techniques
-        
-        - 2 to 3 practice questions, including:
-            * Clear and challenging questions
-            * Difficulty rating (matching the overall difficulty level)
-            * Estimated completion time (minutes)
-            * Detailed answer
-            * A comprehensive explanation of the solution/concept
-        
-        2. 2-3 key milestones, including:
-        - Expected completion date (relative to the start)
-        - Descriptive milestone name
-        - Specific assessment criteria (quantified as much as possible)
-        
-        3. Three to four learning strategies, specifically tailored for the following aspects:
-        - The unique challenges of this discipline
-        - The specified difficulty level
-        - Best knowledge retention
+        1.3 to 5 main themes, comprehensively covering the discipline
+        (1)Each topic must have a clear and descriptive title
+        (2)Provide a detailed explanation of the content covered by this topic (3-5 sentences)
+        (3)Appropriate duration allocation (the total is approximately {target_days} days)
+        (4)3-5 high-quality learning resources, including:
+        1)Descriptive title
+        2)Resource types (videos, articles, interactions, etc.)
+        3)A detailed description of content/value
+        4)Source/Platform name (e.g., Coursera, YouTube, Medium, Khan Academy)
+        5)The URL format is [Platform base URL] + search query related to the resource
+        6)Example：
+         https://www.coursera.org/search?query={subject}+fundamentals
+         https://www.youtube.com/results?search_query={subject}+tutorial
+         https://medium.com/search?q={subject}+advanced+techniques
+        (5)2 to 3 practice questions, including:
+        1)Clear and challenging questions
+        2)Difficulty rating (matching the overall difficulty level)
+        3)Estimated completion time (minutes)
+        4)Detailed answer
+        5)A comprehensive explanation of the solution/concept
+        2.2-3 key milestones, including:
+        (1)Expected completion date (relative to the start)
+        (2)Descriptive milestone name
+        (3)Specific assessment criteria (quantified as much as possible)
+        3.Three to four learning strategies, specifically tailored for the following aspects:
+        (1)The unique challenges of this discipline
+        (2)The specified difficulty level
+        (3)Best knowledge retention
 
         Format your response in a valid JSON format with the exact structure as follows:
         {{

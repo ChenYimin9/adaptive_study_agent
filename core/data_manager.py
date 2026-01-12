@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from dbutils.pooled_db import PooledDB
 
+
 class Config:
     # Connection pool configuration
     POOL_CONFIG = {

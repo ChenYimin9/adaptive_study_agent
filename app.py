@@ -1640,7 +1640,7 @@ def show_planner():
                     "productivity_tips": ai_plan.get('productivity_tips', []),
                     "basic_info": {
                         "subject": selected_path["subject"],
-                        "daily_hours": f"{daily_hours}小时",
+                        "daily_hours": f"{daily_hours}hours",
                         "deadline": deadline.strftime("%Y-%m-%d"),
                         "generated_time": datetime.now().strftime("%Y-%m-%d %H:%M")
                     }
@@ -1725,7 +1725,7 @@ def show_planner():
                     "productivity_tips": saved_plan_json.get("productivity_tips", []),
                     "basic_info": {
                         "subject": selected_path["subject"],
-                        "daily_hours": f"{daily_hours}小时",
+                        "daily_hours": f"{daily_hours}hours",
                         "deadline": deadline.strftime("%Y-%m-%d"),
                         "generated_time": saved_plan['created_at'].strftime("%Y-%m-%d %H:%M")
                     }
