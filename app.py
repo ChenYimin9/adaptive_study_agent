@@ -1586,7 +1586,7 @@ def show_planner():
             # # Use the default theme when parsing fails
             ai_plan_result = st.session_state.ai_agent.generate_study_schedule(
                 deadline=deadline,
-                hours_per_day=daily_minutes,
+                hours_per_day=daily_hours,
                 topics=topics,
                 subject=selected_path['subject'],
                 focus=focus_areas
