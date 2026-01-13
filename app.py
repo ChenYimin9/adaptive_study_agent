@@ -1583,7 +1583,7 @@ def show_planner():
             except json.JSONDecodeError:
                 topics = [f"Topic {i+1}" for i in range(3)]  # Use the default theme when parsing fails
             
-            # # Use the default theme when parsing fails
+            # # U se the default theme when parsing fails()
             ai_plan_result = st.session_state.ai_agent.generate_study_schedule(
                 deadline=deadline,
                 hours_per_day=daily_hours,
@@ -1632,7 +1632,7 @@ def show_planner():
                     if save_result.get("status") == "success":
                         st.success(f"✅ Plan saved successfully! (Plan ID: {save_result['id']})")
                     else:
-                        st.error("❌ Failed to save plan. Please try again.")
+                        st.error("× Failed to save plan. Please try again.")
 
                 # Retain the download function
                 final_plan = {
