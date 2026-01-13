@@ -1617,7 +1617,7 @@ def show_planner():
                         for idx, block in enumerate(day['study_blocks']):
                             block_type = "📚 Learning" if "concept" in block['focus_area'].lower() else "✏️ Practice"
                             st.write(f"{idx+1}. {block_type} - {block['subject']}: {block['topic']}")
-                            st.write(f"   • Duration: {block['duration_minutes']} minutes")
+                            st.write(f"   • Duration: {block['duration_minutes']} hours")
                             st.write(f"   • Focus: {block['focus_area']}")
                             st.write("---")
 
