@@ -1458,7 +1458,7 @@ def show_planner():
         # 3. Add basic plan information
         basic_info = plan_data["basic_info"]
         info_para = doc.add_paragraph()
-        info_para.add_run(f"Daily study duration：{basic_info['daily_hours']}\n").bold = True
+        info_para.add_run(f"study time：{basic_info['daily_hours']}\n").bold = True
         info_para.add_run(f"Planned deadline：{basic_info['deadline']}\n").bold = True
         info_para.add_run(f"Generation time：{basic_info['generated_time']}\n").bold = True
         doc.add_paragraph()  # Blank line separation
@@ -1544,7 +1544,7 @@ def show_planner():
     with col1:
         # Daily study duration (hours to minutes)
         daily_hours = st.slider(
-            "Daily study hours",
+            "Daily study time",
             min_value=0.5, max_value=8.0, value=2.0, step=0.5,
             key="daily_hours_slider"
         )
