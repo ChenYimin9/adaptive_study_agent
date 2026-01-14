@@ -1486,7 +1486,7 @@ def show_planner():
                 row_cells = table.add_row().cells
                 row_cells[0].text = block_type
                 row_cells[1].text = block["topic"]
-                row_cells[2].text = f"{block['duration_minutes']}分钟 | {block['focus_area']}"
+                row_cells[2].text = f"{block['duration_minutes']}minutes | {block['focus_area']}"
 
             doc.add_paragraph()  # Empty walk after each day's schedule
 
